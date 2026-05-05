@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import { healthRouter } from './routes/health.js';
+import { templatesRouter } from './routes/templates.js';
 import { mkdir } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -12,10 +14,8 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// Routes will be mounted here in later tasks
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok' });
-});
+app.use('/health', healthRouter);
+app.use('/templates', templatesRouter);
 
 const PORT = process.env.PORT ?? 3001;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
