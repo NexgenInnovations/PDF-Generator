@@ -28,7 +28,15 @@ const pdfjsWorkerCompatBanner = [
   '  });',
   '}',
 ].join('\n');
-const isExternal = (id: string) => builtinModuleSet.has(id);
+const externalModules = new Set([
+  'antd',
+  'form-render',
+  'antd/es/form/style',
+  'form-render/es/models/useForm',
+]);
+
+const isExternal = (id: string) =>
+  builtinModuleSet.has(id) || externalModules.has(id) || id.startsWith('antd/');
 
 export default defineConfig(({ mode }) => {
   return {
