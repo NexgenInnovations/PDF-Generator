@@ -28,14 +28,24 @@ const pdfjsWorkerCompatBanner = [
   '  });',
   '}',
 ].join('\n');
-const isExternal = (id: string) =>
-  builtinModuleSet.has(id) || id === 'antd' || id.startsWith('antd/') || id === 'form-render' || id.startsWith('form-render/');
+const isExternal = (id: string) => builtinModuleSet.has(id);
+
+const brokenSubPathPrefixes = ['antd/es/', 'antd/lib/', 'rc-picker/es/generate/'];
+const stubBrokenSubPaths = () => ({
+  name: 'stub-broken-sub-paths',
+  resolveId(id: string) {
+    if (brokenSubPathPrefixes.some((p) => id.startsWith(p))) return '\0stub:' + id;
+  },
+  load(id: string) {
+    if (id.startsWith('\0stub:')) return 'export default {}; export {};';
+  },
+});
 
 export default defineConfig(({ mode }) => {
   return {
     base: './',
     define: { 'process.env.NODE_ENV': JSON.stringify(mode) },
-    plugins: [react(), cssInjectedByJsPlugin()],
+    plugins: [react(), cssInjectedByJsPlugin(), stubBrokenSubPaths()],
     build: {
       lib: {
         entry: resolve(__dirname, 'src/index.ts'),

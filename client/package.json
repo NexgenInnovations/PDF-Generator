@@ -15,6 +15,10 @@
     "@pdfme/pdf-lib": "file:../packages/pdf-lib",
     "@pdfme/schemas": "file:../packages/schemas",
     "@pdfme/ui": "file:../packages/ui",
+    "antd": "^6.3.7",
+    "dayjs": "^1.11.20",
+    "form-render": "^2.5.6",
+    "rc-picker": "^4.11.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.0.0"
