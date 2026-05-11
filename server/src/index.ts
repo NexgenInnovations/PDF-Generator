@@ -20,8 +20,8 @@ app.use('/health', healthRouter);
 app.use('/templates', templatesRouter);
 app.use('/filled-pdfs', filledPdfsRouter);
 
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.get('/docs/swagger.json', (_req, res) => res.json(swaggerSpec));
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 const PORT = process.env.PORT ?? 3001;
 app.listen(PORT, () => {
