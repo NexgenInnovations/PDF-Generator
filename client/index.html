@@ -4,6 +4,47 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PDF Template Manager</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <style>
+      @keyframes nx-progress {
+        0%   { width: 0%; }
+        75%  { width: 85%; }
+        100% { width: 100%; }
+      }
+      @keyframes ls-barLight {
+        0%   { left: -40%; width: 40%; }
+        50%  { left: 30%;  width: 55%; }
+        100% { left: 100%; width: 40%; }
+      }
+      .ls-bar-light { animation: ls-barLight 1.8s cubic-bezier(.4,0,.2,1) infinite; }
+      @keyframes ls-dotsAnim {
+        0%, 20% { opacity: 0; }
+        50%     { opacity: 1; }
+        100%    { opacity: 0; }
+      }
+      .ls-dots { display: inline-block; animation: ls-dotsAnim 1.4s ease-in-out infinite; }
+      @keyframes ls-ringSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      .ls-ring-d { transform-origin: 52px 52px; animation: ls-ringSpin 1.4s linear infinite; }
+      .ls-dot-pulse {
+        width: 7px; height: 7px; border-radius: 999px; background: #60A5FA;
+        box-shadow: 0 0 10px #60A5FA;
+        animation: ls-dotPulse 1.4s ease-in-out infinite;
+      }
+      @keyframes ls-dotPulse {
+        0%, 100% { opacity: 0.35; transform: scale(0.85); }
+        50%      { opacity: 1;    transform: scale(1.1); }
+      }
+      .ls-mdot {
+        width: 6px; height: 6px; border-radius: 999px; background: #60A5FA;
+        animation: ls-mdotJump 1.2s ease-in-out infinite;
+      }
+      @keyframes ls-mdotJump {
+        0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+        40%           { opacity: 1; transform: translateY(-5px); }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

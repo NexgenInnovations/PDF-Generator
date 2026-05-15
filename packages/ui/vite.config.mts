@@ -28,24 +28,20 @@ const pdfjsWorkerCompatBanner = [
   '  });',
   '}',
 ].join('\n');
-const isExternal = (id: string) => builtinModuleSet.has(id);
-
-const brokenSubPathPrefixes = ['antd/es/', 'antd/lib/', 'rc-picker/es/generate/'];
-const stubBrokenSubPaths = () => ({
-  name: 'stub-broken-sub-paths',
-  resolveId(id: string) {
-    if (brokenSubPathPrefixes.some((p) => id.startsWith(p))) return '\0stub:' + id;
-  },
-  load(id: string) {
-    if (id.startsWith('\0stub:')) return 'export default {}; export {};';
-  },
-});
+const externalPackages = new Set(['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime']);
+const isExternal = (id: string) => builtinModuleSet.has(id) || externalPackages.has(id);
 
 export default defineConfig(({ mode }) => {
   return {
     base: './',
     define: { 'process.env.NODE_ENV': JSON.stringify(mode) },
-    plugins: [react(), cssInjectedByJsPlugin(), stubBrokenSubPaths()],
+    plugins: [react(), cssInjectedByJsPlugin()],
+    resolve: {
+      alias: {
+        antd: resolve(__dirname, '../../client/node_modules/antd'),
+        'rc-picker': resolve(__dirname, '../../client/node_modules/rc-picker'),
+      },
+    },
     build: {
       lib: {
         entry: resolve(__dirname, 'src/index.ts'),

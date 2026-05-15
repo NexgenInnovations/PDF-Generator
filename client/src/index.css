@@ -1,0 +1,246 @@
+@import "tailwindcss";
+
+/* ══════════════════════════════════════════
+   NEXGEN INNOVATIONS — Brand Design System
+   Primary:   #000000  pure black
+   Accent 1:  #0057FF  deep electric blue
+   Accent 2:  #00CFFF  bright cyan
+   Gradient:  #0057FF → #00CFFF  (diagonal/radial)
+   Text sec:  #A0B4CC  steel blue-grey
+   Text head: #FFFFFF  white
+   ══════════════════════════════════════════ */
+
+:root {
+  /* Core brand */
+  --nx-black:        #000000;
+  --nx-blue:         #0057FF;
+  --nx-cyan:         #00CFFF;
+  --nx-text-sec:     #A0B4CC;
+  --nx-border:       rgba(0, 207, 255, 0.15);
+  --nx-border-hover: rgba(0, 207, 255, 0.40);
+  --nx-glow:         0 0 12px rgba(0, 207, 255, 0.33);
+  --nx-glow-btn:     0 0 18px rgba(0, 207, 255, 0.45), 0 0 6px rgba(0, 87, 255, 0.30);
+  --nx-surface:      rgba(255, 255, 255, 0.04);
+  --nx-surface-hov:  rgba(0, 207, 255, 0.06);
+
+  /* Tailwind semantic tokens — dark-first */
+  --background:        0 0% 0%;           /* #000 */
+  --foreground:        210 40% 98%;       /* #F8FAFD white */
+  --card:              0 0% 4%;           /* #0A0A0A */
+  --card-foreground:   210 40% 98%;
+  --popover:           220 20% 6%;
+  --popover-foreground:210 40% 98%;
+  --primary:           216 100% 50%;      /* #0057FF */
+  --primary-foreground:0 0% 100%;
+  --secondary:         213 30% 18%;
+  --secondary-foreground:210 40% 90%;
+  --muted:             215 20% 12%;
+  --muted-foreground:  213 25% 63%;       /* #A0B4CC */
+  --accent:            195 100% 50%;      /* #00CFFF */
+  --accent-foreground: 0 0% 0%;
+  --destructive:       0 72% 51%;
+  --destructive-foreground:0 0% 100%;
+  --border:            213 60% 25%;       /* dark blue-grey border */
+  --input:             215 20% 10%;
+  --ring:              195 100% 50%;
+  --radius:            0.5rem;
+}
+
+/* ══════════════════════════════════════════
+   LIGHT MODE — data-theme="light" on <html>
+   Keeps Nexgen brand accent colours, uses
+   white/light-grey surfaces instead of black
+   ══════════════════════════════════════════ */
+[data-theme="light"] {
+  --nx-black:        #F0F4FA;
+  --nx-surface:      rgba(255, 255, 255, 0.85);
+  --nx-surface-hov:  rgba(0, 87, 255, 0.06);
+  --nx-border:       rgba(0, 87, 255, 0.15);
+  --nx-border-hover: rgba(0, 87, 255, 0.35);
+  --nx-text-sec:     #4A6080;
+
+  /* Page & surface colours */
+  --lm-bg:           #F0F4FA;
+  --lm-bg2:          #E6EBF5;
+  --lm-surface:      rgba(255,255,255,0.90);
+  --lm-border:       rgba(0,87,255,0.13);
+  --lm-border-card:  rgba(0,87,255,0.12);
+  --lm-text:         #0D1B2E;
+  --lm-text-sec:     #4A6080;
+  --lm-sidebar-bg:   rgba(240,244,250,0.92);
+  --lm-topbar-bg:    rgba(240,244,250,0.85);
+}
+
+/* Light mode body */
+[data-theme="light"] body {
+  background: #F0F4FA;
+  color: #0D1B2E;
+}
+
+/* Light mode sidebar */
+[data-theme="light"] aside {
+  background: rgba(240,244,250,0.92) !important;
+  border-right-color: rgba(0,87,255,0.12) !important;
+}
+
+/* Light mode topbar */
+[data-theme="light"] header[class*="sticky"] {
+  background: rgba(240,244,250,0.88) !important;
+  border-bottom-color: rgba(0,87,255,0.10) !important;
+}
+
+/* Light mode cards */
+[data-theme="light"] .rounded-xl[class*="border"] {
+  background: rgba(255,255,255,0.85) !important;
+  border-color: rgba(0,87,255,0.12) !important;
+  color: #0D1B2E !important;
+}
+
+/* Light mode page background */
+[data-theme="light"] .p-6 {
+  background: transparent;
+}
+
+/* Light mode text overrides */
+[data-theme="light"] h1,
+[data-theme="light"] h2,
+[data-theme="light"] h3 {
+  color: #0D1B2E;
+  -webkit-text-fill-color: #0D1B2E;
+  background: none;
+}
+
+[data-theme="light"] .text-white {
+  color: #0D1B2E !important;
+}
+
+[data-theme="light"] p,
+[data-theme="light"] span,
+[data-theme="light"] td,
+[data-theme="light"] th {
+  color: inherit;
+}
+
+/* Light mode table */
+[data-theme="light"] table tbody tr:hover {
+  background: rgba(0,87,255,0.04) !important;
+}
+
+/* Light mode input */
+[data-theme="light"] input {
+  background: rgba(255,255,255,0.90) !important;
+  border-color: rgba(0,87,255,0.20) !important;
+  color: #0D1B2E !important;
+}
+
+[data-theme="light"] input::placeholder {
+  color: rgba(74,96,128,0.60) !important;
+}
+
+/* Light mode scrollbar */
+[data-theme="light"] ::-webkit-scrollbar-track { background: #E6EBF5; }
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0,87,255,0.20); }
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(0,87,255,0.40); }
+
+/* Reset */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: #000000;
+  color: #FFFFFF;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+/* ── Nexgen gradient helpers ── */
+.nx-gradient-text {
+  background: linear-gradient(135deg, #0057FF 0%, #00CFFF 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.nx-gradient-bg {
+  background: linear-gradient(135deg, #0057FF 0%, #00CFFF 100%);
+}
+
+.nx-gradient-border {
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  position: relative;
+}
+
+.nx-glow-btn {
+  box-shadow: 0 0 18px rgba(0, 207, 255, 0.45), 0 0 6px rgba(0, 87, 255, 0.30);
+}
+
+/* ── Route-change progress bar (top of screen) ── */
+@keyframes nx-progress {
+  0%   { width: 0%; opacity: 1; }
+  80%  { width: 90%; opacity: 1; }
+  100% { width: 100%; opacity: 0; }
+}
+
+.nx-route-bar {
+  animation: nx-progress 3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* ── Transition overlay fade ── */
+@keyframes nx-fade-out {
+  0%   { opacity: 1; }
+  70%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.nx-overlay-fade {
+  animation: nx-fade-out 3.4s ease-out forwards;
+}
+
+/* ── Legacy loading animations (LoadingScreen component) ── */
+@keyframes ls-barLight {
+  0%   { left: -40%; width: 40%; }
+  50%  { left: 30%;  width: 55%; }
+  100% { left: 100%; width: 40%; }
+}
+.ls-bar-light { animation: ls-barLight 1.8s cubic-bezier(.4,0,.2,1) infinite; }
+
+@keyframes ls-dotsAnim {
+  0%, 20% { opacity: 0; }
+  50%     { opacity: 1; }
+  100%    { opacity: 0; }
+}
+.ls-dots { display: inline-block; animation: ls-dotsAnim 1.4s ease-in-out infinite; }
+
+@keyframes ls-ringSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.ls-ring-d { transform-origin: 52px 52px; animation: ls-ringSpin 1.4s linear infinite; }
+
+.ls-dot-pulse {
+  width: 7px; height: 7px; border-radius: 999px;
+  background: #00CFFF; box-shadow: 0 0 10px #00CFFF;
+  animation: ls-dotPulse 1.4s ease-in-out infinite;
+}
+@keyframes ls-dotPulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50%      { opacity: 1;    transform: scale(1.1); }
+}
+
+.ls-mdot {
+  width: 6px; height: 6px; border-radius: 999px;
+  animation: ls-mdotJump 1.2s ease-in-out infinite;
+}
+@keyframes ls-mdotJump {
+  0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+  40%           { opacity: 1;    transform: translateY(-6px); }
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0A0A0A; }
+::-webkit-scrollbar-thumb { background: rgba(0,207,255,0.25); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,207,255,0.45); }
+
+/* ── Focus ring ── */
+:focus-visible { outline: 2px solid #00CFFF; outline-offset: 2px; }
