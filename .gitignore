@@ -15,3 +15,5 @@ coverage/
 **/__image_diffs__/**
 **/__image_diff_report__/**
 server/outputs/*.pdf
+server/data/
+.claude/
