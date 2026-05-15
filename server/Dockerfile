@@ -15,11 +15,11 @@ COPY packages/converter ./packages/converter
 # Copy server source
 COPY server ./server
 
-# Install deps for the server workspace
-RUN npm install --workspace=server --include-workspace-root
+# Install deps — run from server dir since it's not in root workspaces
+WORKDIR /app/server
+RUN npm install
 
 # Build server TypeScript
-WORKDIR /app/server
 RUN npm run build
 
 # --- Runtime image ---
@@ -27,8 +27,8 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/server/node_modules ./server/node_modules
 COPY --from=builder /app/server/dist ./server/dist
 COPY --from=builder /app/server/package.json ./server/package.json
 
