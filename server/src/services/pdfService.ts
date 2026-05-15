@@ -4,13 +4,6 @@ import {
   text, multiVariableText, image, barcodes, line, rectangle, ellipse,
   table, list, dateTime, date, time, select, checkbox, radioGroup, signature, svg,
 } from '@pdfme/schemas';
-import { writeFile } from 'fs/promises';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { v4 as uuidv4 } from 'uuid';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const OUTPUTS_DIR = join(__dirname, '..', '..', 'outputs');
 
 const getPlugins = () => ({
   Text: text,
@@ -34,19 +27,15 @@ const getPlugins = () => ({
   Code128: barcodes.code128,
 });
 
-export async function generateAndSavePdf(
+export async function generatePdf(
   template: Template,
   inputs: Record<string, string>[],
-): Promise<string> {
+): Promise<Buffer> {
   const pdf = await generate({
     template,
     inputs,
     options: { font: getDefaultFont() },
     plugins: getPlugins(),
   });
-
-  const filename = `${uuidv4()}.pdf`;
-  const filePath = join(OUTPUTS_DIR, filename);
-  await writeFile(filePath, pdf);
-  return `outputs/${filename}`;
+  return Buffer.from(pdf);
 }

@@ -5,7 +5,7 @@ import {
   getTemplate,
   listTemplates,
   updateTemplate,
-} from '../storage.js';
+} from '../db.js';
 
 export const templatesRouter = Router();
 

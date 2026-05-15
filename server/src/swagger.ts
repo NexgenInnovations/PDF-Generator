@@ -7,9 +7,9 @@ const options: swaggerJsdoc.Options = {
     info: {
       title: 'PDF Template Manager API',
       version: '1.0.0',
-      description: 'REST API for managing PDF templates and generated filled PDFs',
+      description: 'REST API for managing PDF templates and generating PDFs',
     },
-    servers: [{ url: 'http://localhost:3001', description: 'Local dev server' }],
+    servers: [{ url: `http://localhost:${process.env.PORT ?? 3004}`, description: 'Local dev server' }],
     components: {
       schemas: {
         TemplateSummary: {
@@ -22,32 +22,20 @@ const options: swaggerJsdoc.Options = {
           },
         },
         TemplateRecord: {
-          allOf: [
-            { $ref: '#/components/schemas/TemplateSummary' },
-            {
-              type: 'object',
-              properties: {
-                schema: { type: 'object', description: 'Full pdfme Template object' },
-              },
-            },
-          ],
-        },
-        FilledPdfRecord: {
           type: 'object',
           properties: {
             id: { type: 'string', format: 'uuid' },
-            template_id: { type: 'string', format: 'uuid' },
-            inputs: {
-              type: 'array',
-              items: { type: 'object', additionalProperties: { type: 'string' } },
-            },
-            file_path: { type: 'string' },
+            name: { type: 'string' },
+            schema: { type: 'object' },
             created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time', nullable: true },
           },
         },
         Error: {
           type: 'object',
-          properties: { error: { type: 'string' } },
+          properties: {
+            error: { type: 'string' },
+          },
         },
       },
     },
