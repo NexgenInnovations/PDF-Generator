@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 
-const SHOW_MS = 1600;   // start fade at 1.6s
-const FADE_MS = 400;    // fade duration — total = 2s
+const SHOW_MS = 1600;
+const FADE_MS = 400;
 
 export function TransitionLoader() {
   const location = useLocation();
@@ -37,8 +37,7 @@ export function TransitionLoader() {
         position: 'fixed',
         inset: 0,
         zIndex: 9999,
-        /* Lighter semi-transparent overlay */
-        background: 'rgba(0, 6, 24, 0.60)',
+        background: 'rgba(255, 255, 255, 0.92)',
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
         display: 'flex',
@@ -51,56 +50,58 @@ export function TransitionLoader() {
         pointerEvents: fading ? 'none' : 'all',
       }}
     >
-      {/* Subtle radial glow */}
+      {/* Logo mark */}
       <div style={{
-        position: 'absolute',
-        inset: 0,
-        background: 'radial-gradient(ellipse 50% 40% at 50% 50%, rgba(0,87,255,0.10) 0%, rgba(0,207,255,0.04) 50%, transparent 75%)',
-        pointerEvents: 'none',
-      }} />
-
-      {/* "Powered by" */}
-      <span style={{
-        fontFamily: "'Inter', system-ui, sans-serif",
-        fontSize: 12,
-        fontWeight: 500,
-        letterSpacing: '0.25em',
-        textTransform: 'uppercase' as const,
-        color: 'rgba(160,180,204,0.80)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 10,
         position: 'relative',
         zIndex: 1,
       }}>
-        Powered by
-      </span>
+        <div style={{
+          width: 48,
+          height: 48,
+          borderRadius: 12,
+          background: '#000',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+            <polyline points="10 9 9 9 8 9" />
+          </svg>
+        </div>
+        <span style={{
+          fontFamily: "'Geist Mono', monospace",
+          fontSize: 11,
+          fontWeight: 400,
+          letterSpacing: '0.20em',
+          textTransform: 'uppercase',
+          color: 'rgba(0,0,0,0.35)',
+        }}>
+          Nexgen Innovations
+        </span>
+      </div>
 
-      {/* Nexgen logo */}
-      <img
-        src="/nexgen-logo.png"
-        alt="Nexgen Innovations"
-        style={{
-          height: 108,
-          objectFit: 'contain',
-          position: 'relative',
-          zIndex: 1,
-          filter: 'drop-shadow(0 0 12px rgba(0,207,255,0.30))',
-        }}
-      />
-
-      {/* Cyan progress bar — bottom edge */}
+      {/* Black progress bar — bottom edge */}
       <div style={{
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        height: 3,
-        background: 'rgba(0,207,255,0.08)',
+        height: 2,
+        background: '#f7f7f5',
         overflow: 'hidden',
       }}>
         <div
           style={{
             height: '100%',
-            background: 'linear-gradient(90deg, #0057FF 0%, #00CFFF 100%)',
-            boxShadow: '0 0 10px rgba(0,207,255,0.50)',
+            background: '#000',
             animation: `nx-progress ${SHOW_MS}ms cubic-bezier(0.4, 0, 0.2, 1) forwards`,
           }}
         />

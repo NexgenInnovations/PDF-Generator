@@ -6,40 +6,46 @@ import { useRole } from '../context/RoleContext.js';
 import type { TemplateSummary } from '../types.js';
 import { AppLayout } from '../components/layout/AppLayout.js';
 import { TopBar } from '../components/layout/TopBar.js';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.js';
-import { Badge } from '../components/ui/badge.js';
+
+const BLOCK_COLORS = ['#dceeb1', '#c5b0f4', '#f4ecd6', '#c8e6cd', '#efd4d4', '#f3c9b6'];
 
 interface StatCardProps {
   title: string;
   value: string | number;
   icon: React.ReactNode;
   description?: string;
+  color: string;
 }
 
-function StatCard({ title, value, icon, description }: StatCardProps) {
+function StatCard({ title, value, icon, description, color }: StatCardProps) {
   return (
-    <Card className="relative overflow-hidden group">
-      {/* Gradient accent line top */}
-      <div
-        className="absolute top-0 left-0 right-0 h-px"
-        style={{ background: 'linear-gradient(90deg, transparent, #0057FF, #00CFFF, transparent)' }}
-      />
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-xs font-semibold tracking-widest uppercase text-[#A0B4CC]">
-          {title}
-        </CardTitle>
-        <div
-          className="flex h-8 w-8 items-center justify-center rounded-lg"
-          style={{ background: 'linear-gradient(135deg, rgba(0,87,255,0.25), rgba(0,207,255,0.15))', border: '1px solid rgba(0,207,255,0.20)' }}
+    <div
+      className="rounded-2xl p-6 flex flex-col gap-4"
+      style={{ background: color }}
+    >
+      <div className="flex items-center justify-between">
+        <span
+          className="text-[10px] font-medium tracking-widest uppercase"
+          style={{ fontFamily: "'Geist Mono', monospace", color: 'rgba(0,0,0,0.50)' }}
         >
-          <span className="text-[#00CFFF] [&_svg]:h-4 [&_svg]:w-4">{icon}</span>
+          {title}
+        </span>
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-black/10">
+          <span className="text-black/70 [&_svg]:h-4 [&_svg]:w-4">{icon}</span>
         </div>
-      </CardHeader>
-      <CardContent>
-        <div className="text-3xl font-bold text-white">{value}</div>
-        {description && <p className="text-xs text-[#A0B4CC]/70 mt-1">{description}</p>}
-      </CardContent>
-    </Card>
+      </div>
+      <div>
+        <div className="text-4xl font-bold text-black tracking-tight" style={{ letterSpacing: '-0.02em' }}>{value}</div>
+        {description && (
+          <p
+            className="text-xs mt-1"
+            style={{ fontFamily: "'Geist Mono', monospace", color: 'rgba(0,0,0,0.45)' }}
+          >
+            {description}
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -75,18 +81,21 @@ export default function Dashboard() {
             value={loading ? '—' : templates.length}
             icon={<FileText />}
             description="All time"
+            color="#dceeb1"
           />
           <StatCard
             title="Recent Activity"
             value={loading ? '—' : recent.length}
             icon={<TrendingUp />}
             description="Last 7 days"
+            color="#c5b0f4"
           />
           <StatCard
             title="Your Role"
             value={role}
             icon={<CheckCircle />}
             description="Current session"
+            color="#f4ecd6"
           />
           <StatCard
             title="Last Updated"
@@ -102,26 +111,20 @@ export default function Dashboard() {
             }
             icon={<Clock />}
             description="Most recent edit"
+            color="#c8e6cd"
           />
         </div>
 
         {/* Recent templates */}
         <div>
           <div className="flex items-center justify-between mb-5">
-            <h2
-              className="text-base font-bold tracking-tight"
-              style={{
-                background: 'linear-gradient(90deg, #FFFFFF, #A0B4CC)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }}
-            >
+            <h2 className="text-xl font-bold text-black" style={{ letterSpacing: '-0.02em' }}>
               Recent Templates
             </h2>
             <button
               onClick={() => navigate('/templates')}
-              className="text-xs font-semibold text-[#A0B4CC] hover:text-[#00CFFF] transition-colors"
-              style={{ letterSpacing: '0.05em' }}
+              className="text-xs font-semibold text-black/50 hover:text-black transition-colors"
+              style={{ fontFamily: "'Geist Mono', monospace", letterSpacing: '0.04em' }}
             >
               View all →
             </button>
@@ -130,74 +133,72 @@ export default function Dashboard() {
           {loading && (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 3 }).map((_, i) => (
-                <Card key={i} className="animate-pulse">
-                  <CardContent className="p-5 space-y-3">
-                    <div className="h-3 rounded bg-[rgba(255,255,255,0.06)] w-2/3" />
-                    <div className="h-2.5 rounded bg-[rgba(255,255,255,0.04)] w-1/3" />
-                  </CardContent>
-                </Card>
+                <div
+                  key={i}
+                  className="animate-pulse rounded-2xl p-6 space-y-3"
+                  style={{ background: '#f7f7f5' }}
+                >
+                  <div className="h-3 rounded-full bg-black/10 w-2/3" />
+                  <div className="h-2.5 rounded-full bg-black/6 w-1/3" />
+                </div>
               ))}
             </div>
           )}
 
           {!loading && templates.length === 0 && (
-            <Card
-              className="border-dashed"
-              style={{ borderColor: 'rgba(0,207,255,0.15)', background: 'rgba(0,87,255,0.04)' }}
+            <div
+              className="rounded-2xl p-12 flex flex-col items-center justify-center text-center"
+              style={{ background: '#f7f7f5', border: '2px dashed #e6e6e6' }}
             >
-              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-                <div
-                  className="flex h-14 w-14 items-center justify-center rounded-xl mb-4"
-                  style={{ background: 'linear-gradient(135deg, rgba(0,87,255,0.20), rgba(0,207,255,0.10))', border: '1px solid rgba(0,207,255,0.20)' }}
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/6 mb-4">
+                <FileText className="h-6 w-6 text-black/40" />
+              </div>
+              <p className="text-base font-bold text-black">No templates yet</p>
+              <p className="text-sm text-black/50 mt-1 mb-6">
+                {canEdit ? 'Create your first template to get started.' : 'No templates are available.'}
+              </p>
+              {canEdit && (
+                <button
+                  onClick={() => navigate('/templates/new')}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-black hover:bg-black/80 active:scale-[0.97] transition-all"
+                  style={{ borderRadius: 50 }}
                 >
-                  <FileText className="h-6 w-6 text-[#00CFFF]" />
-                </div>
-                <p className="text-sm font-semibold text-white">No templates yet</p>
-                <p className="text-xs text-[#A0B4CC] mt-1 mb-6">
-                  {canEdit ? 'Create your first template to get started.' : 'No templates are available.'}
-                </p>
-                {canEdit && (
-                  <button
-                    onClick={() => navigate('/templates/new')}
-                    className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all duration-200 hover:brightness-110"
-                    style={{ background: 'linear-gradient(135deg, #0057FF, #00CFFF)', boxShadow: '0 0 14px rgba(0,207,255,0.35)' }}
-                  >
-                    <Plus className="h-4 w-4" />
-                    Create Template
-                  </button>
-                )}
-              </CardContent>
-            </Card>
+                  <Plus className="h-4 w-4" />
+                  Create Template
+                </button>
+              )}
+            </div>
           )}
 
           {!loading && templates.length > 0 && (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {recent.map((t) => (
-                <Card
+              {recent.map((t, i) => (
+                <div
                   key={t.id}
-                  className="cursor-pointer group"
+                  className="cursor-pointer rounded-2xl p-5 transition-all duration-150 hover:scale-[1.01]"
+                  style={{ background: BLOCK_COLORS[i % BLOCK_COLORS.length] }}
                   onClick={() => navigate(canEdit ? `/templates/${t.id}/edit` : `/templates/${t.id}/fill`)}
                 >
-                  <CardContent className="p-5">
-                    <div className="flex items-start gap-3">
-                      <div
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
-                        style={{ background: 'linear-gradient(135deg, rgba(0,87,255,0.25), rgba(0,207,255,0.15))', border: '1px solid rgba(0,207,255,0.20)' }}
-                      >
-                        <FileText className="h-4 w-4 text-[#00CFFF]" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-sm text-white truncate group-hover:text-[#00CFFF] transition-colors">{t.name}</p>
-                        <p className="text-xs text-[#A0B4CC]/70 mt-0.5">
-                          {new Date(t.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <Badge variant={t.updated_at ? 'default' : 'secondary'} className="shrink-0 text-[10px]">
-                        {t.updated_at ? 'Edited' : 'New'}
-                      </Badge>
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black/10">
+                      <FileText className="h-4 w-4 text-black/60" />
                     </div>
-                  </CardContent>
-                </Card>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-sm text-black truncate" style={{ letterSpacing: '-0.01em' }}>{t.name}</p>
+                      <p
+                        className="text-xs mt-0.5"
+                        style={{ fontFamily: "'Geist Mono', monospace", color: 'rgba(0,0,0,0.45)' }}
+                      >
+                        {new Date(t.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <span
+                      className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-black/10 text-black/60"
+                    >
+                      {t.updated_at ? 'Edited' : 'New'}
+                    </span>
+                  </div>
+                </div>
               ))}
             </div>
           )}

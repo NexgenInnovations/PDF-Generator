@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Designer } from '@pdfme/ui';
 import { type Template } from '@pdfme/common';
-import { AlertCircle, ArrowLeft, Save, Loader2 } from 'lucide-react';
+import {
+  AlertCircle, ArrowLeft, Save, Loader2,
+  FileJson, FileDown, RotateCcw, Copy, FileUp, Layout,
+} from 'lucide-react';
 import { api } from '../lib/api.js';
 import { getFonts, getPlugins } from '../lib/pdfme.js';
 import { Input } from '../components/ui/input.js';
@@ -12,14 +15,83 @@ const BLANK_TEMPLATE: Template = {
   schemas: [[]],
 };
 
+function ToolbarBtn({
+  icon, label, onClick, accent,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  accent?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-all duration-150"
+      style={accent ? {
+        background: '#000',
+        color: '#fff',
+        borderRadius: 50,
+        border: 'none',
+      } : {
+        background: 'transparent',
+        color: 'rgba(0,0,0,0.55)',
+        borderRadius: 50,
+        border: '1px solid #e6e6e6',
+      }}
+      onMouseEnter={e => {
+        if (!accent) {
+          (e.currentTarget as HTMLButtonElement).style.background = '#f7f7f5';
+          (e.currentTarget as HTMLButtonElement).style.color = '#000';
+        }
+      }}
+      onMouseLeave={e => {
+        if (!accent) {
+          (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+          (e.currentTarget as HTMLButtonElement).style.color = 'rgba(0,0,0,0.55)';
+        }
+      }}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+function Sep() {
+  return <div style={{ width: 1, height: 20, background: '#e6e6e6', flexShrink: 0 }} />;
+}
+
+function Group({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <span style={{
+        fontSize: 9,
+        fontWeight: 400,
+        letterSpacing: '0.10em',
+        color: 'rgba(0,0,0,0.35)',
+        textTransform: 'uppercase',
+        fontFamily: "'Geist Mono', monospace",
+      }}>
+        {label}
+      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export default function TemplateDesigner() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const designerRef = useRef<Designer | null>(null);
+  const basePdfInputRef = useRef<HTMLInputElement | null>(null);
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [jsonOpen, setJsonOpen] = useState(false);
+  const [jsonText, setJsonText] = useState('');
 
   useEffect(() => {
     let mounted = true;
@@ -63,7 +135,7 @@ export default function TemplateDesigner() {
       } else {
         await api.createTemplate(name.trim(), schema);
       }
-      navigate('/');
+      navigate('/templates');
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -71,37 +143,110 @@ export default function TemplateDesigner() {
     }
   };
 
+  const handleSaveAs = async () => {
+    if (!designerRef.current) return;
+    const newName = prompt('Save as — enter new template name:', name ? `${name} (copy)` : '');
+    if (!newName?.trim()) return;
+    try {
+      const schema = designerRef.current.getTemplate();
+      await api.createTemplate(newName.trim(), schema);
+      navigate('/templates');
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const handleReset = () => {
+    if (!designerRef.current) return;
+    if (!confirm('Reset the canvas? All unsaved changes will be lost.')) return;
+    designerRef.current.updateTemplate(BLANK_TEMPLATE);
+  };
+
+  const handleStaticSchema = () => {
+    if (!designerRef.current) return;
+    const t = designerRef.current.getTemplate();
+    const hasStatic = t.schemas.length > 1;
+    if (hasStatic) {
+      designerRef.current.updateTemplate({ ...t, schemas: [t.schemas[0]] });
+    } else {
+      designerRef.current.updateTemplate({ ...t, schemas: [...t.schemas, []] });
+    }
+  };
+
+  const handleOpenJson = () => {
+    if (!designerRef.current) return;
+    setJsonText(JSON.stringify(designerRef.current.getTemplate(), null, 2));
+    setJsonOpen(true);
+  };
+
+  const handleApplyJson = () => {
+    if (!designerRef.current) return;
+    try {
+      const parsed = JSON.parse(jsonText) as Template;
+      designerRef.current.updateTemplate(parsed);
+      setJsonOpen(false);
+    } catch {
+      alert('Invalid JSON — please fix and try again.');
+    }
+  };
+
+  const handleDownloadTemplateJson = () => {
+    if (!designerRef.current) return;
+    const blob = new Blob([JSON.stringify(designerRef.current.getTemplate(), null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${name || 'template'}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleChangePdf = () => basePdfInputRef.current?.click();
+
+  const handleBasePdfFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !designerRef.current) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const t = designerRef.current!.getTemplate();
+      designerRef.current!.updateTemplate({ ...t, basePdf: dataUrl });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const barStyle: React.CSSProperties = {
+    background: '#ffffff',
+    borderBottom: '1px solid #e6e6e6',
+    flexShrink: 0,
+  };
+
   return (
-    <div className="flex flex-col" style={{ height: '100vh', background: '#000' }}>
-      {/* Toolbar */}
-      <div
-        className="flex items-center gap-3 px-4 py-2.5 shrink-0"
-        style={{
-          background: 'rgba(0,0,0,0.90)',
-          borderBottom: '1px solid rgba(0,207,255,0.12)',
-          backdropFilter: 'blur(16px)',
-        }}
-      >
+    <div className="flex flex-col" style={{ height: '100vh', background: '#f7f7f5' }}>
+
+      {/* Row 1 — name / save */}
+      <div className="flex items-center gap-3 px-4 py-2.5" style={barStyle}>
         <button
-          onClick={() => navigate('/')}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-[#A0B4CC] hover:text-[#00CFFF] hover:bg-[rgba(0,207,255,0.08)] transition-all"
-          style={{ border: '1px solid rgba(0,207,255,0.12)' }}
+          onClick={() => navigate('/templates')}
+          className="flex h-8 w-8 items-center justify-center rounded-full text-black/50 hover:text-black hover:bg-[#f7f7f5] transition-all"
+          style={{ border: '1px solid #e6e6e6' }}
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
 
-        <div className="h-5 w-px" style={{ background: 'rgba(0,207,255,0.15)' }} />
+        <div className="h-5 w-px" style={{ background: '#e6e6e6' }} />
 
         <Input
           type="text"
           placeholder="Template name…"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-64 h-8 text-sm"
+          className="w-64 h-8 text-sm bg-[#f7f7f5] border-[#e6e6e6] text-black placeholder:text-black/30 rounded-[50px]"
         />
 
         {error && (
-          <div className="flex items-center gap-1.5 text-red-400 text-xs">
+          <div className="flex items-center gap-1.5 text-red-600 text-xs">
             <AlertCircle className="h-3.5 w-3.5 shrink-0" />
             {error}
           </div>
@@ -110,9 +255,9 @@ export default function TemplateDesigner() {
         <div className="flex-1" />
 
         <button
-          onClick={() => navigate('/')}
-          className="rounded-lg px-3 py-1.5 text-xs font-semibold text-[#A0B4CC] hover:text-white transition-colors"
-          style={{ border: '1px solid rgba(0,207,255,0.15)' }}
+          onClick={() => navigate('/templates')}
+          className="px-3 py-1.5 text-xs font-semibold text-black/50 hover:text-black transition-colors"
+          style={{ borderRadius: 50, border: '1px solid #e6e6e6' }}
         >
           Cancel
         </button>
@@ -120,11 +265,8 @@ export default function TemplateDesigner() {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-50 transition-all hover:brightness-110 active:scale-[0.97]"
-          style={{
-            background: 'linear-gradient(135deg, #0057FF, #00CFFF)',
-            boxShadow: '0 0 14px rgba(0,207,255,0.35)',
-          }}
+          className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-black hover:bg-black/80 disabled:opacity-50 transition-all active:scale-[0.97]"
+          style={{ borderRadius: 50 }}
         >
           {saving ? (
             <><Loader2 className="h-3.5 w-3.5 animate-spin" />Saving…</>
@@ -134,8 +276,97 @@ export default function TemplateDesigner() {
         </button>
       </div>
 
+      {/* Row 2 — action toolbar */}
+      <div
+        className="flex items-end gap-4 px-4 py-2"
+        style={{ ...barStyle }}
+      >
+        <Group label="Base PDF">
+          <ToolbarBtn icon={<FileUp size={13} />} label="Change PDF" onClick={handleChangePdf} />
+          <input ref={basePdfInputRef} type="file" accept="application/pdf" style={{ display: 'none' }} onChange={handleBasePdfFile} />
+        </Group>
+
+        <Sep />
+
+        <Group label="Edit">
+          <ToolbarBtn icon={<Layout size={13} />} label="Static schema" onClick={handleStaticSchema} />
+          <ToolbarBtn icon={<FileJson size={13} />} label="JSON" onClick={handleOpenJson} />
+        </Group>
+
+        <Sep />
+
+        <Group label="Project">
+          <ToolbarBtn icon={<Save size={13} />} label="Save Project" onClick={handleSave} accent />
+          <ToolbarBtn icon={<Copy size={13} />} label="Save As" onClick={handleSaveAs} />
+          <ToolbarBtn icon={<RotateCcw size={13} />} label="Reset" onClick={handleReset} />
+        </Group>
+
+        <Sep />
+
+        <Group label="Output">
+          <ToolbarBtn icon={<FileDown size={13} />} label="Template JSON" onClick={handleDownloadTemplateJson} />
+        </Group>
+      </div>
+
+      {/* JSON editor modal */}
+      {jsonOpen && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,0.40)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <div style={{
+            width: '60vw', maxWidth: 800,
+            background: '#fff',
+            border: '1px solid #e6e6e6',
+            borderRadius: 16,
+            display: 'flex', flexDirection: 'column',
+            overflow: 'hidden',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.15)',
+          }}>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid #e6e6e6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#000', fontWeight: 700, fontSize: 14 }}>Template JSON</span>
+              <button onClick={() => setJsonOpen(false)} style={{ color: 'rgba(0,0,0,0.40)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>✕</button>
+            </div>
+            <textarea
+              value={jsonText}
+              onChange={e => setJsonText(e.target.value)}
+              style={{
+                width: '100%', height: '60vh',
+                background: '#f7f7f5',
+                color: '#000',
+                fontFamily: "'Geist Mono', monospace",
+                fontSize: 12,
+                border: 'none',
+                padding: 16,
+                resize: 'none',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+            <div style={{ padding: '10px 16px', borderTop: '1px solid #e6e6e6', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                onClick={() => setJsonOpen(false)}
+                style={{ padding: '6px 16px', borderRadius: 50, border: '1px solid #e6e6e6', background: 'transparent', color: 'rgba(0,0,0,0.55)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApplyJson}
+                style={{ padding: '6px 16px', borderRadius: 50, border: 'none', background: '#000', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Designer canvas */}
-      <div ref={containerRef} className="flex-1 overflow-hidden" />
+      <div ref={containerRef} className="flex-1 min-h-0 overflow-hidden" />
     </div>
   );
 }

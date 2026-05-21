@@ -6,7 +6,6 @@ import { getInputFromTemplate, type Template } from '@pdfme/common';
 import { ArrowLeft, Download, FileCheck, Loader2, AlertCircle } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { getFonts, getPlugins } from '../lib/pdfme.js';
-import { Badge } from '../components/ui/badge.js';
 
 type PageState = 'filling' | 'preview';
 
@@ -82,38 +81,42 @@ export default function FormFill() {
   };
 
   return (
-    <div className="flex flex-col" style={{ height: '100vh', background: '#000' }}>
+    <div className="flex flex-col" style={{ height: '100vh', background: '#f7f7f5' }}>
       {/* Toolbar */}
       <div
-        className="flex items-center gap-3 px-4 py-2.5 shrink-0"
-        style={{
-          background: 'rgba(0,0,0,0.90)',
-          borderBottom: '1px solid rgba(0,207,255,0.12)',
-          backdropFilter: 'blur(16px)',
-        }}
+        className="flex items-center gap-3 px-4 py-2.5 shrink-0 bg-white"
+        style={{ borderBottom: '1px solid #e6e6e6' }}
       >
         <button
           onClick={() => navigate('/')}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-[#A0B4CC] hover:text-[#00CFFF] hover:bg-[rgba(0,207,255,0.08)] transition-all"
-          style={{ border: '1px solid rgba(0,207,255,0.12)' }}
+          className="flex h-8 w-8 items-center justify-center rounded-full text-black/40 hover:text-black hover:bg-[#f7f7f5] transition-all"
+          style={{ border: '1px solid #e6e6e6' }}
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
 
-        <div className="h-5 w-px" style={{ background: 'rgba(0,207,255,0.15)' }} />
+        <div className="h-5 w-px" style={{ background: '#e6e6e6' }} />
 
-        <span className="font-semibold text-sm text-white truncate max-w-xs">
+        <span className="font-semibold text-sm text-black truncate max-w-xs">
           {templateRecord?.name ?? 'Loading…'}
         </span>
 
-        <Badge variant={pageState === 'preview' ? 'success' : 'secondary'} className="text-[10px]">
+        <span
+          className="px-2.5 py-0.5 text-[10px] font-semibold"
+          style={{
+            borderRadius: 50,
+            background: pageState === 'preview' ? '#c8e6cd' : '#f7f7f5',
+            color: pageState === 'preview' ? '#1ea64a' : 'rgba(0,0,0,0.50)',
+            border: '1px solid #e6e6e6',
+          }}
+        >
           {pageState === 'preview' ? (
-            <><FileCheck className="h-3 w-3 mr-1 inline" />Generated</>
+            <span className="inline-flex items-center gap-1"><FileCheck className="h-3 w-3" />Generated</span>
           ) : 'Filling'}
-        </Badge>
+        </span>
 
         {error && (
-          <div className="flex items-center gap-1.5 text-red-400 text-xs">
+          <div className="flex items-center gap-1.5 text-red-600 text-xs">
             <AlertCircle className="h-3.5 w-3.5 shrink-0" />
             {error}
           </div>
@@ -123,8 +126,8 @@ export default function FormFill() {
 
         <button
           onClick={() => navigate('/')}
-          className="rounded-lg px-3 py-1.5 text-xs font-semibold text-[#A0B4CC] hover:text-white transition-colors"
-          style={{ border: '1px solid rgba(0,207,255,0.15)' }}
+          className="px-3 py-1.5 text-xs font-semibold text-black/50 hover:text-black transition-colors"
+          style={{ borderRadius: 50, border: '1px solid #e6e6e6' }}
         >
           Back
         </button>
@@ -133,8 +136,8 @@ export default function FormFill() {
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-50 transition-all hover:brightness-110"
-            style={{ background: 'linear-gradient(135deg, #0057FF, #00CFFF)', boxShadow: '0 0 14px rgba(0,207,255,0.35)' }}
+            className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-black hover:bg-black/80 disabled:opacity-50 transition-all active:scale-[0.97]"
+            style={{ borderRadius: 50 }}
           >
             {submitting ? (
               <><Loader2 className="h-3.5 w-3.5 animate-spin" />Generating…</>
@@ -145,8 +148,8 @@ export default function FormFill() {
         {pageState === 'preview' && (
           <button
             onClick={handleDownload}
-            className="inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-semibold text-white transition-all hover:brightness-110"
-            style={{ background: 'linear-gradient(135deg, #0057FF, #00CFFF)', boxShadow: '0 0 14px rgba(0,207,255,0.35)' }}
+            className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-black hover:bg-black/80 transition-all active:scale-[0.97]"
+            style={{ borderRadius: 50 }}
           >
             <Download className="h-3.5 w-3.5" />
             Download PDF
