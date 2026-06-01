@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { generatePdf } from '../services/pdfService.js';
-import { getTemplate } from '../db.js';
+import { getTemplate, getLatestTemplateVersion } from '../db.js';
 import type { Template } from '@pdfme/common';
 
 export const generatePdfRouter = Router();
@@ -69,7 +69,13 @@ generatePdfRouter.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const pdf = await generatePdf(record.schema as Template, inputs);
+    const latestVersion = await getLatestTemplateVersion(template_id);
+    if (!latestVersion) {
+      res.status(404).json({ error: 'No template version found' });
+      return;
+    }
+
+    const pdf = await generatePdf(latestVersion.schema as Template, inputs);
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename="generated.pdf"');

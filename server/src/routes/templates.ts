@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import {
   createTemplate,
+  createTemplateVersion,
   deleteTemplate,
   getTemplate,
   listTemplates,
@@ -119,7 +120,9 @@ templatesRouter.post('/', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'name and schema are required' });
       return;
     }
-    res.status(201).json(await createTemplate(name, schema));
+    const template = await createTemplate(name);
+    const version = await createTemplateVersion(template.id, schema);
+    res.status(201).json({ ...template, schema, version: version.version });
   } catch (error) {
     handleError(res, error);
   }
@@ -167,7 +170,10 @@ templatesRouter.post('/', async (req: Request, res: Response) => {
 templatesRouter.put('/:id', async (req: Request, res: Response) => {
   try {
     const { name, schema } = req.body as { name: string; schema: unknown };
-    const template = await updateTemplate(req.params.id, name, schema);
+    const template = await updateTemplate(req.params.id, name);
+    if (template && schema !== undefined) {
+      await createTemplateVersion(template.id, schema);
+    }
     if (!template) {
       res.status(404).json({ error: 'Template not found' });
       return;
