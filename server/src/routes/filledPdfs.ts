@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { generatePdf } from '../services/pdfService.js';
-import { getTemplate, getLatestTemplateVersion } from '../db.js';
+import { getTemplate, getLatestTemplateVersion, createFilledSubmission, createGeneratedPdf } from '../db.js';
 import type { Template } from '@pdfme/common';
 
 export const generatePdfRouter = Router();
@@ -76,6 +76,21 @@ generatePdfRouter.post('/', async (req: Request, res: Response) => {
     }
 
     const pdf = await generatePdf(latestVersion.schema as Template, inputs);
+
+    const submission = await createFilledSubmission(
+      template_id,
+      latestVersion.version,
+      inputs
+    );
+    await createGeneratedPdf({
+      submissionId: submission.id,
+      templateId: template_id,
+      templateVersion: latestVersion.version,
+      inputsSnapshot: inputs,
+      schemaSnapshot: latestVersion.schema,
+      filePath: 'generated-in-memory',
+      fileSizeBytes: pdf.length,
+    });
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename="generated.pdf"');
