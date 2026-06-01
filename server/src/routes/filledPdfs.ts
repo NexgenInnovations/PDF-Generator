@@ -57,8 +57,8 @@ generatePdfRouter.post('/', async (req: Request, res: Response) => {
     inputs?: Record<string, string>[];
   };
 
-  if (!template_id || !inputs) {
-    res.status(400).json({ error: 'template_id and inputs are required' });
+  if (!template_id || !Array.isArray(inputs) || inputs.length === 0) {
+    res.status(400).json({ error: 'template_id and a non-empty inputs array are required' });
     return;
   }
 
@@ -77,20 +77,24 @@ generatePdfRouter.post('/', async (req: Request, res: Response) => {
 
     const pdf = await generatePdf(latestVersion.schema as Template, inputs);
 
-    const submission = await createFilledSubmission(
-      template_id,
-      latestVersion.version,
-      inputs
-    );
-    await createGeneratedPdf({
-      submissionId: submission.id,
-      templateId: template_id,
-      templateVersion: latestVersion.version,
-      inputsSnapshot: inputs,
-      schemaSnapshot: latestVersion.schema,
-      filePath: 'generated-in-memory',
-      fileSizeBytes: pdf.length,
-    });
+    try {
+      const submission = await createFilledSubmission(
+        template_id,
+        latestVersion.version,
+        inputs
+      );
+      await createGeneratedPdf({
+        submissionId: submission.id,
+        templateId: template_id,
+        templateVersion: latestVersion.version,
+        inputsSnapshot: inputs,
+        schemaSnapshot: latestVersion.schema,
+        filePath: 'generated-in-memory',
+        fileSizeBytes: pdf.length,
+      });
+    } catch (dbErr) {
+      console.error('Failed to record submission/generated_pdf:', dbErr);
+    }
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename="generated.pdf"');

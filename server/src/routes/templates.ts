@@ -169,14 +169,18 @@ templatesRouter.post('/', async (req: Request, res: Response) => {
  */
 templatesRouter.put('/:id', async (req: Request, res: Response) => {
   try {
-    const { name, schema } = req.body as { name: string; schema: unknown };
-    const template = await updateTemplate(req.params.id, name);
-    if (template && schema !== undefined) {
-      await createTemplateVersion(template.id, schema);
+    const { name, schema } = req.body as { name?: string; schema?: unknown };
+    if (!name) {
+      res.status(400).json({ error: 'name is required' });
+      return;
     }
+    const template = await updateTemplate(req.params.id, name);
     if (!template) {
       res.status(404).json({ error: 'Template not found' });
       return;
+    }
+    if (schema !== undefined) {
+      await createTemplateVersion(template.id, schema);
     }
     res.json(template);
   } catch (error) {

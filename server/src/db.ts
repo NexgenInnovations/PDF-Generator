@@ -27,14 +27,6 @@ export interface TemplateRow {
   updated_at: string;
 }
 
-export interface TemplateSummaryRow {
-  id: string;
-  name: string;
-  current_version: number;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface TemplateVersionRow {
   id: string;
   template_id: string;
@@ -67,8 +59,8 @@ export interface GeneratedPdfRow {
 
 // ─── pdf_templates ───────────────────────────────────────────────────────────
 
-export async function listTemplates(): Promise<TemplateSummaryRow[]> {
-  const { rows } = await pool.query<TemplateSummaryRow>(
+export async function listTemplates(): Promise<TemplateRow[]> {
+  const { rows } = await pool.query<TemplateRow>(
     'SELECT id, name, current_version, created_at, updated_at FROM pdf_templates ORDER BY created_at DESC'
   );
   return rows;
@@ -113,30 +105,43 @@ export async function createTemplateVersion(
   templateId: string,
   schema: unknown
 ): Promise<TemplateVersionRow> {
-  // Increment current_version on the template and use the new value as version number
-  const { rows: updated } = await pool.query<{ current_version: number }>(
-    `UPDATE pdf_templates
-     SET current_version = current_version + 1, updated_at = NOW()
-     WHERE id = $1
-     RETURNING current_version`,
-    [templateId]
-  );
-  const version = updated[0].current_version;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  const schemaObj = schema as { basePdf?: unknown; schemas?: unknown };
-  const { rows } = await pool.query<TemplateVersionRow>(
-    `INSERT INTO template_versions (template_id, version, schema, base_pdf, schemas)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING id, template_id, version, schema, base_pdf, schemas, created_at`,
-    [
-      templateId,
-      version,
-      JSON.stringify(schema),
-      JSON.stringify(schemaObj.basePdf ?? null),
-      JSON.stringify(schemaObj.schemas ?? null),
-    ]
-  );
-  return rows[0];
+    const { rows: updated } = await client.query<{ current_version: number }>(
+      `UPDATE pdf_templates
+       SET current_version = current_version + 1, updated_at = NOW()
+       WHERE id = $1
+       RETURNING current_version`,
+      [templateId]
+    );
+    if (!updated[0]) throw new Error('Template not found');
+
+    const version = updated[0].current_version;
+    const schemaObj = schema as { basePdf?: unknown; schemas?: unknown };
+
+    const { rows } = await client.query<TemplateVersionRow>(
+      `INSERT INTO template_versions (template_id, version, schema, base_pdf, schemas)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, template_id, version, schema, base_pdf, schemas, created_at`,
+      [
+        templateId,
+        version,
+        JSON.stringify(schema),
+        JSON.stringify(schemaObj.basePdf ?? null),
+        JSON.stringify(schemaObj.schemas ?? null),
+      ]
+    );
+
+    await client.query('COMMIT');
+    return rows[0];
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
 export async function listTemplateVersions(templateId: string): Promise<TemplateVersionRow[]> {
