@@ -1,20 +1,90 @@
 // server/src/db.ts
-import { Pool } from 'pg';
+import sql from 'mssql';
 
-const pool = new Pool({
-  host:     process.env.DB_HOST     ?? 'localhost',
-  port:     Number(process.env.DB_PORT ?? 5432),
-  database: process.env.DB_NAME     ?? '',
-  user:     process.env.DB_USER     ?? '',
+const config: sql.config = {
+  server: process.env.DB_SERVER ?? '',
+  port: Number(process.env.DB_PORT ?? 1433),
+  database: process.env.DB_NAME ?? '',
+  user: process.env.DB_USER ?? '',
   password: process.env.DB_PASSWORD ?? '',
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
-  min: Number(process.env.DB_POOL_MIN ?? 2),
-  max: Number(process.env.DB_POOL_MAX ?? 10),
-});
+  options: {
+    encrypt: process.env.DB_ENCRYPT === 'true',
+    trustServerCertificate: process.env.DB_TRUST_CERT === 'true',
+  },
+  pool: {
+    min: Number(process.env.DB_POOL_MIN ?? 2),
+    max: Number(process.env.DB_POOL_MAX ?? 10),
+  },
+};
+
+let pool: sql.ConnectionPool | null = null;
 
 export async function initDb(): Promise<void> {
-  await pool.query('SELECT 1');
-  console.log('Connected to PostgreSQL');
+  pool = await new sql.ConnectionPool(config).connect();
+  console.log('Connected to MSSQL');
+  await ensureTables();
+}
+
+function getPool(): sql.ConnectionPool {
+  if (!pool) throw new Error('DB not initialised — call initDb() first');
+  return pool;
+}
+
+async function ensureTables(): Promise<void> {
+  const p = getPool();
+
+  await p.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'pdf_templates')
+    CREATE TABLE pdf_templates (
+      id              UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+      name            NVARCHAR(255)    NOT NULL,
+      current_version INT              NOT NULL DEFAULT 1,
+      created_at      DATETIME2        NOT NULL DEFAULT GETUTCDATE(),
+      updated_at      DATETIME2        NOT NULL DEFAULT GETUTCDATE()
+    )
+  `);
+
+  await p.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'template_versions')
+    CREATE TABLE template_versions (
+      id          UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+      template_id UNIQUEIDENTIFIER NOT NULL REFERENCES pdf_templates(id) ON DELETE CASCADE,
+      version     INT              NOT NULL,
+      [schema]    NVARCHAR(MAX)    NOT NULL,
+      base_pdf    NVARCHAR(MAX)    NOT NULL,
+      [schemas]   NVARCHAR(MAX)    NOT NULL,
+      created_at  DATETIME2        NOT NULL DEFAULT GETUTCDATE(),
+      CONSTRAINT uq_template_version UNIQUE (template_id, version)
+    )
+  `);
+
+  await p.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'filled_submissions')
+    CREATE TABLE filled_submissions (
+      id               UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+      template_id      UNIQUEIDENTIFIER NOT NULL REFERENCES pdf_templates(id) ON DELETE CASCADE,
+      template_version INT              NOT NULL,
+      [inputs]         NVARCHAR(MAX)    NOT NULL,
+      submitted_at     DATETIME2        NOT NULL DEFAULT GETUTCDATE()
+    )
+  `);
+
+  await p.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'generated_pdfs')
+    CREATE TABLE generated_pdfs (
+      id               UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+      submission_id    UNIQUEIDENTIFIER NOT NULL REFERENCES filled_submissions(id),
+      template_id      UNIQUEIDENTIFIER NOT NULL REFERENCES pdf_templates(id),
+      template_version INT              NOT NULL,
+      inputs_snapshot  NVARCHAR(MAX)    NOT NULL,
+      schema_snapshot  NVARCHAR(MAX)    NOT NULL,
+      file_path        NVARCHAR(1000)   NOT NULL,
+      file_size_bytes  BIGINT,
+      generated_at     DATETIME2        NOT NULL DEFAULT GETUTCDATE()
+    )
+  `);
+
+  console.log('Tables ready');
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -60,43 +130,53 @@ export interface GeneratedPdfRow {
 // ─── pdf_templates ───────────────────────────────────────────────────────────
 
 export async function listTemplates(): Promise<TemplateRow[]> {
-  const { rows } = await pool.query<TemplateRow>(
+  const result = await getPool().request().query(
     'SELECT id, name, current_version, created_at, updated_at FROM pdf_templates ORDER BY created_at DESC'
   );
-  return rows;
+  return result.recordset;
 }
 
 export async function getTemplate(id: string): Promise<TemplateRow | null> {
-  const { rows } = await pool.query<TemplateRow>(
-    'SELECT id, name, current_version, created_at, updated_at FROM pdf_templates WHERE id = $1',
-    [id]
-  );
-  return rows[0] ?? null;
+  const result = await getPool()
+    .request()
+    .input('id', sql.UniqueIdentifier, id)
+    .query('SELECT id, name, current_version, created_at, updated_at FROM pdf_templates WHERE id = @id');
+  return result.recordset[0] ?? null;
 }
 
 export async function createTemplate(name: string): Promise<TemplateRow> {
-  const { rows } = await pool.query<TemplateRow>(
-    `INSERT INTO pdf_templates (name)
-     VALUES ($1)
-     RETURNING id, name, current_version, created_at, updated_at`,
-    [name]
-  );
-  return rows[0];
+  const result = await getPool()
+    .request()
+    .input('name', sql.NVarChar(255), name)
+    .query(`
+      INSERT INTO pdf_templates (name)
+      OUTPUT INSERTED.id, INSERTED.name, INSERTED.current_version,
+             INSERTED.created_at, INSERTED.updated_at
+      VALUES (@name)
+    `);
+  return result.recordset[0];
 }
 
 export async function updateTemplate(id: string, name: string): Promise<TemplateRow | null> {
-  const { rows } = await pool.query<TemplateRow>(
-    `UPDATE pdf_templates
-     SET name = $1, updated_at = NOW()
-     WHERE id = $2
-     RETURNING id, name, current_version, created_at, updated_at`,
-    [name, id]
-  );
-  return rows[0] ?? null;
+  const result = await getPool()
+    .request()
+    .input('id', sql.UniqueIdentifier, id)
+    .input('name', sql.NVarChar(255), name)
+    .query(`
+      UPDATE pdf_templates
+      SET name = @name, updated_at = GETUTCDATE()
+      OUTPUT INSERTED.id, INSERTED.name, INSERTED.current_version,
+             INSERTED.created_at, INSERTED.updated_at
+      WHERE id = @id
+    `);
+  return result.recordset[0] ?? null;
 }
 
 export async function deleteTemplate(id: string): Promise<void> {
-  await pool.query('DELETE FROM pdf_templates WHERE id = $1', [id]);
+  await getPool()
+    .request()
+    .input('id', sql.UniqueIdentifier, id)
+    .query('DELETE FROM pdf_templates WHERE id = @id');
 }
 
 // ─── template_versions ───────────────────────────────────────────────────────
@@ -105,80 +185,112 @@ export async function createTemplateVersion(
   templateId: string,
   schema: unknown
 ): Promise<TemplateVersionRow> {
-  const client = await pool.connect();
+  const p = getPool();
+  const transaction = new sql.Transaction(p);
+  await transaction.begin();
   try {
-    await client.query('BEGIN');
-
-    const { rows: updated } = await client.query<{ current_version: number }>(
-      `UPDATE pdf_templates
-       SET current_version = current_version + 1, updated_at = NOW()
-       WHERE id = $1
-       RETURNING current_version`,
-      [templateId]
-    );
-    if (!updated[0]) throw new Error('Template not found');
-
-    const version = updated[0].current_version;
     const schemaObj = schema as { basePdf?: unknown; schemas?: unknown };
 
-    const { rows } = await client.query<TemplateVersionRow>(
-      `INSERT INTO template_versions (template_id, version, schema, base_pdf, schemas)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, template_id, version, schema, base_pdf, schemas, created_at`,
-      [
-        templateId,
-        version,
-        JSON.stringify(schema),
-        JSON.stringify(schemaObj.basePdf ?? null),
-        JSON.stringify(schemaObj.schemas ?? null),
-      ]
-    );
+    // Increment version counter and get new value
+    const versionResult = await transaction.request()
+      .input('tid', sql.UniqueIdentifier, templateId)
+      .query(`
+        UPDATE pdf_templates
+        SET current_version = current_version + 1, updated_at = GETUTCDATE()
+        OUTPUT INSERTED.current_version
+        WHERE id = @tid
+      `);
+    if (!versionResult.recordset[0]) throw new Error('Template not found');
+    const version = versionResult.recordset[0].current_version as number;
 
-    await client.query('COMMIT');
-    return rows[0];
+    const insertResult = await transaction.request()
+      .input('tid', sql.UniqueIdentifier, templateId)
+      .input('version', sql.Int, version)
+      .input('schema_val', sql.NVarChar(sql.MAX), JSON.stringify(schema))
+      .input('base_pdf', sql.NVarChar(sql.MAX), JSON.stringify(schemaObj.basePdf ?? null))
+      .input('schemas_val', sql.NVarChar(sql.MAX), JSON.stringify(schemaObj.schemas ?? null))
+      .query(`
+        INSERT INTO template_versions (template_id, version, [schema], base_pdf, [schemas])
+        OUTPUT INSERTED.id, INSERTED.template_id, INSERTED.version,
+               INSERTED.[schema], INSERTED.base_pdf, INSERTED.[schemas], INSERTED.created_at
+        VALUES (@tid, @version, @schema_val, @base_pdf, @schemas_val)
+      `);
+
+    await transaction.commit();
+    const row = insertResult.recordset[0];
+    return {
+      ...row,
+      schema: JSON.parse(row.schema as string ?? row['schema'] as string),
+      base_pdf: JSON.parse(row.base_pdf as string),
+      schemas: JSON.parse(row.schemas as string ?? row['schemas'] as string),
+    };
   } catch (e) {
-    await client.query('ROLLBACK');
+    await transaction.rollback();
     throw e;
-  } finally {
-    client.release();
   }
 }
 
 export async function listTemplateVersions(templateId: string): Promise<TemplateVersionRow[]> {
-  const { rows } = await pool.query<TemplateVersionRow>(
-    `SELECT id, template_id, version, schema, base_pdf, schemas, created_at
-     FROM template_versions
-     WHERE template_id = $1
-     ORDER BY version DESC`,
-    [templateId]
-  );
-  return rows;
+  const result = await getPool()
+    .request()
+    .input('tid', sql.UniqueIdentifier, templateId)
+    .query(`
+      SELECT id, template_id, version, [schema], base_pdf, [schemas], created_at
+      FROM template_versions
+      WHERE template_id = @tid
+      ORDER BY version DESC
+    `);
+  return result.recordset.map(row => ({
+    ...row,
+    schema: JSON.parse(row.schema as string),
+    base_pdf: JSON.parse(row.base_pdf as string),
+    schemas: JSON.parse(row.schemas as string),
+  }));
 }
 
 export async function getTemplateVersion(
   templateId: string,
   version: number
 ): Promise<TemplateVersionRow | null> {
-  const { rows } = await pool.query<TemplateVersionRow>(
-    `SELECT id, template_id, version, schema, base_pdf, schemas, created_at
-     FROM template_versions
-     WHERE template_id = $1 AND version = $2`,
-    [templateId, version]
-  );
-  return rows[0] ?? null;
+  const result = await getPool()
+    .request()
+    .input('tid', sql.UniqueIdentifier, templateId)
+    .input('version', sql.Int, version)
+    .query(`
+      SELECT id, template_id, version, [schema], base_pdf, [schemas], created_at
+      FROM template_versions
+      WHERE template_id = @tid AND version = @version
+    `);
+  const row = result.recordset[0];
+  if (!row) return null;
+  return {
+    ...row,
+    schema: JSON.parse(row.schema as string),
+    base_pdf: JSON.parse(row.base_pdf as string),
+    schemas: JSON.parse(row.schemas as string),
+  };
 }
 
 export async function getLatestTemplateVersion(
   templateId: string
 ): Promise<TemplateVersionRow | null> {
-  const { rows } = await pool.query<TemplateVersionRow>(
-    `SELECT tv.id, tv.template_id, tv.version, tv.schema, tv.base_pdf, tv.schemas, tv.created_at
-     FROM template_versions tv
-     JOIN pdf_templates t ON t.id = tv.template_id
-     WHERE tv.template_id = $1 AND tv.version = t.current_version`,
-    [templateId]
-  );
-  return rows[0] ?? null;
+  const result = await getPool()
+    .request()
+    .input('tid', sql.UniqueIdentifier, templateId)
+    .query(`
+      SELECT tv.id, tv.template_id, tv.version, tv.[schema], tv.base_pdf, tv.[schemas], tv.created_at
+      FROM template_versions tv
+      JOIN pdf_templates t ON t.id = tv.template_id
+      WHERE tv.template_id = @tid AND tv.version = t.current_version
+    `);
+  const row = result.recordset[0];
+  if (!row) return null;
+  return {
+    ...row,
+    schema: JSON.parse(row.schema as string),
+    base_pdf: JSON.parse(row.base_pdf as string),
+    schemas: JSON.parse(row.schemas as string),
+  };
 }
 
 // ─── filled_submissions ───────────────────────────────────────────────────────
@@ -188,33 +300,45 @@ export async function createFilledSubmission(
   templateVersion: number,
   inputs: unknown
 ): Promise<FilledSubmissionRow> {
-  const { rows } = await pool.query<FilledSubmissionRow>(
-    `INSERT INTO filled_submissions (template_id, template_version, inputs)
-     VALUES ($1, $2, $3)
-     RETURNING id, template_id, template_version, inputs, submitted_at`,
-    [templateId, templateVersion, JSON.stringify(inputs)]
-  );
-  return rows[0];
+  const result = await getPool()
+    .request()
+    .input('tid', sql.UniqueIdentifier, templateId)
+    .input('version', sql.Int, templateVersion)
+    .input('inputs_val', sql.NVarChar(sql.MAX), JSON.stringify(inputs))
+    .query(`
+      INSERT INTO filled_submissions (template_id, template_version, [inputs])
+      OUTPUT INSERTED.id, INSERTED.template_id, INSERTED.template_version,
+             INSERTED.[inputs], INSERTED.submitted_at
+      VALUES (@tid, @version, @inputs_val)
+    `);
+  const row = result.recordset[0];
+  return { ...row, inputs: JSON.parse(row.inputs as string) };
 }
 
 export async function listFilledSubmissions(templateId: string): Promise<FilledSubmissionRow[]> {
-  const { rows } = await pool.query<FilledSubmissionRow>(
-    `SELECT id, template_id, template_version, inputs, submitted_at
-     FROM filled_submissions
-     WHERE template_id = $1
-     ORDER BY submitted_at DESC`,
-    [templateId]
-  );
-  return rows;
+  const result = await getPool()
+    .request()
+    .input('tid', sql.UniqueIdentifier, templateId)
+    .query(`
+      SELECT id, template_id, template_version, [inputs], submitted_at
+      FROM filled_submissions
+      WHERE template_id = @tid
+      ORDER BY submitted_at DESC
+    `);
+  return result.recordset.map(row => ({ ...row, inputs: JSON.parse(row.inputs as string) }));
 }
 
 export async function getFilledSubmission(id: string): Promise<FilledSubmissionRow | null> {
-  const { rows } = await pool.query<FilledSubmissionRow>(
-    `SELECT id, template_id, template_version, inputs, submitted_at
-     FROM filled_submissions WHERE id = $1`,
-    [id]
-  );
-  return rows[0] ?? null;
+  const result = await getPool()
+    .request()
+    .input('id', sql.UniqueIdentifier, id)
+    .query(`
+      SELECT id, template_id, template_version, [inputs], submitted_at
+      FROM filled_submissions WHERE id = @id
+    `);
+  const row = result.recordset[0];
+  if (!row) return null;
+  return { ...row, inputs: JSON.parse(row.inputs as string) };
 }
 
 // ─── generated_pdfs ──────────────────────────────────────────────────────────
@@ -228,43 +352,63 @@ export async function createGeneratedPdf(opts: {
   filePath: string;
   fileSizeBytes?: number;
 }): Promise<GeneratedPdfRow> {
-  const { rows } = await pool.query<GeneratedPdfRow>(
-    `INSERT INTO generated_pdfs
-       (submission_id, template_id, template_version, inputs_snapshot, schema_snapshot, file_path, file_size_bytes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
-     RETURNING id, submission_id, template_id, template_version,
-               inputs_snapshot, schema_snapshot, file_path, file_size_bytes, generated_at`,
-    [
-      opts.submissionId,
-      opts.templateId,
-      opts.templateVersion,
-      JSON.stringify(opts.inputsSnapshot),
-      JSON.stringify(opts.schemaSnapshot),
-      opts.filePath,
-      opts.fileSizeBytes ?? null,
-    ]
-  );
-  return rows[0];
+  const result = await getPool()
+    .request()
+    .input('sid', sql.UniqueIdentifier, opts.submissionId)
+    .input('tid', sql.UniqueIdentifier, opts.templateId)
+    .input('version', sql.Int, opts.templateVersion)
+    .input('inputs_snapshot', sql.NVarChar(sql.MAX), JSON.stringify(opts.inputsSnapshot))
+    .input('schema_snapshot', sql.NVarChar(sql.MAX), JSON.stringify(opts.schemaSnapshot))
+    .input('file_path', sql.NVarChar(1000), opts.filePath)
+    .input('file_size_bytes', sql.BigInt, opts.fileSizeBytes ?? null)
+    .query(`
+      INSERT INTO generated_pdfs
+        (submission_id, template_id, template_version, inputs_snapshot, schema_snapshot, file_path, file_size_bytes)
+      OUTPUT INSERTED.id, INSERTED.submission_id, INSERTED.template_id, INSERTED.template_version,
+             INSERTED.inputs_snapshot, INSERTED.schema_snapshot, INSERTED.file_path,
+             INSERTED.file_size_bytes, INSERTED.generated_at
+      VALUES (@sid, @tid, @version, @inputs_snapshot, @schema_snapshot, @file_path, @file_size_bytes)
+    `);
+  const row = result.recordset[0];
+  return {
+    ...row,
+    inputs_snapshot: JSON.parse(row.inputs_snapshot as string),
+    schema_snapshot: JSON.parse(row.schema_snapshot as string),
+  };
 }
 
 export async function listGeneratedPdfs(templateId: string): Promise<GeneratedPdfRow[]> {
-  const { rows } = await pool.query<GeneratedPdfRow>(
-    `SELECT id, submission_id, template_id, template_version,
-            inputs_snapshot, schema_snapshot, file_path, file_size_bytes, generated_at
-     FROM generated_pdfs
-     WHERE template_id = $1
-     ORDER BY generated_at DESC`,
-    [templateId]
-  );
-  return rows;
+  const result = await getPool()
+    .request()
+    .input('tid', sql.UniqueIdentifier, templateId)
+    .query(`
+      SELECT id, submission_id, template_id, template_version,
+             inputs_snapshot, schema_snapshot, file_path, file_size_bytes, generated_at
+      FROM generated_pdfs
+      WHERE template_id = @tid
+      ORDER BY generated_at DESC
+    `);
+  return result.recordset.map(row => ({
+    ...row,
+    inputs_snapshot: JSON.parse(row.inputs_snapshot as string),
+    schema_snapshot: JSON.parse(row.schema_snapshot as string),
+  }));
 }
 
 export async function getGeneratedPdf(id: string): Promise<GeneratedPdfRow | null> {
-  const { rows } = await pool.query<GeneratedPdfRow>(
-    `SELECT id, submission_id, template_id, template_version,
-            inputs_snapshot, schema_snapshot, file_path, file_size_bytes, generated_at
-     FROM generated_pdfs WHERE id = $1`,
-    [id]
-  );
-  return rows[0] ?? null;
+  const result = await getPool()
+    .request()
+    .input('id', sql.UniqueIdentifier, id)
+    .query(`
+      SELECT id, submission_id, template_id, template_version,
+             inputs_snapshot, schema_snapshot, file_path, file_size_bytes, generated_at
+      FROM generated_pdfs WHERE id = @id
+    `);
+  const row = result.recordset[0];
+  if (!row) return null;
+  return {
+    ...row,
+    inputs_snapshot: JSON.parse(row.inputs_snapshot as string),
+    schema_snapshot: JSON.parse(row.schema_snapshot as string),
+  };
 }
