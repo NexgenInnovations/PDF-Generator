@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Designer } from '@pdfme/ui';
-import { isBlankPdf, type Template } from '@pdfme/common';
+import { generate } from '@pdfme/generator';
+import { getInputFromTemplate, isBlankPdf, type Template } from '@pdfme/common';
 import {
   AlertCircle, ArrowLeft, Save, Loader2,
-  FileJson, FileDown, RotateCcw, Copy, FileUp, Layout, Sparkles,
+  FileJson, FileDown, RotateCcw, Copy, FileUp, Layout, Sparkles, Printer,
   RectangleVertical, RectangleHorizontal, PanelTop,
 } from 'lucide-react';
 import { api } from '../lib/api.js';
@@ -114,6 +115,7 @@ export default function TemplateDesigner() {
   const basePdfInputRef = useRef<HTMLInputElement | null>(null);
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jsonOpen, setJsonOpen] = useState(false);
   const [jsonText, setJsonText] = useState('');
@@ -294,6 +296,29 @@ export default function TemplateDesigner() {
     URL.revokeObjectURL(url);
   };
 
+  const handleGeneratePdf = async () => {
+    if (!designerRef.current) return;
+    setGenerating(true);
+    setError(null);
+    try {
+      const template = designerRef.current.getTemplate();
+      const inputs = getInputFromTemplate(template);
+      const pdfBytes = await generate({
+        template,
+        inputs,
+        options: { font: getFonts() },
+        plugins: getPlugins(),
+      });
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const handleChangePdf = () => basePdfInputRef.current?.click();
 
   const handleBasePdfFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -440,6 +465,12 @@ export default function TemplateDesigner() {
 
         <Group label="Output">
           <ToolbarBtn icon={<FileDown size={13} />} label="Template JSON" onClick={handleDownloadTemplateJson} />
+          <ToolbarBtn
+            icon={generating ? <Loader2 size={13} className="animate-spin" /> : <Printer size={13} />}
+            label={generating ? 'Generating…' : 'Generate PDF'}
+            onClick={handleGeneratePdf}
+            disabled={generating}
+          />
         </Group>
       </div>
 
