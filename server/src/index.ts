@@ -15,8 +15,8 @@ app.use(express.json({ limit: '10mb' }));
 
 app.use('/health', healthRouter);
 app.use('/templates', templatesRouter);
-app.use('/api/generate-pdf', generatePdfRouter);
-app.use('/api/ai-form', aiFormRouter);
+app.use('/generate-pdf', generatePdfRouter);
+app.use('/ai-form', aiFormRouter);
 
 app.get('/docs/swagger.json', (_req, res) => res.json(swaggerSpec));
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));

@@ -7,9 +7,9 @@ export const generatePdfRouter = Router();
 
 /**
  * @openapi
- * /api/generate-pdf:
+ * /generate-pdf:
  *   post:
- *     summary: Generate a PDF from a template and return it as a binary file
+ *     summary: Generate a PDF from a template and return it as a downloadable file
  *     tags: [PDF Generation]
  *     requestBody:
  *       required: true
@@ -22,17 +22,40 @@ export const generatePdfRouter = Router();
  *               template_id:
  *                 type: string
  *                 format: uuid
- *                 example: "527f8122-2009-4e84-b56b-dad77675da08"
+ *                 example: "F60E93AD-3726-4B83-AEA4-06948CAD870B"
  *               inputs:
  *                 type: array
  *                 items:
  *                   type: object
  *                   additionalProperties:
  *                     type: string
- *                 example: [{"field1": "NEXGEN", "field2": "123"}]
+ *                 example:
+ *                   - company_name: "Nexgen Solutions"
+ *                     company_address: "123 Tech Street, Sydney NSW 2000"
+ *                     company_email: "billing@nexgen.com.au"
+ *                     client_name: "Acme Corporation"
+ *                     client_address: "456 Client Avenue, Melbourne VIC 3000"
+ *                     invoice_number: "INV-2026-001"
+ *                     invoice_date: "16/06/2026"
+ *                     due_date: "30/06/2026"
+ *                     item1_desc: "Web Development Services"
+ *                     item1_qty: "10 hrs"
+ *                     item1_price: "$1,500.00"
+ *                     item2_desc: "UI/UX Design"
+ *                     item2_qty: "5 hrs"
+ *                     item2_price: "$750.00"
+ *                     subtotal: "$2,250.00"
+ *                     tax: "$225.00"
+ *                     total: "$2,475.00"
+ *                     notes: "Payment due within 14 days. Thank you for your business!"
  *     responses:
  *       200:
- *         description: PDF file binary
+ *         description: Generated PDF file — downloads automatically
+ *         headers:
+ *           Content-Disposition:
+ *             schema:
+ *               type: string
+ *               example: attachment; filename="generated.pdf"
  *         content:
  *           application/pdf:
  *             schema:

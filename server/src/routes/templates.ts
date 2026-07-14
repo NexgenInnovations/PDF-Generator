@@ -3,6 +3,7 @@ import {
   createTemplate,
   createTemplateVersion,
   deleteTemplate,
+  getLatestTemplateVersion,
   getTemplate,
   listTemplates,
   updateTemplate,
@@ -74,7 +75,8 @@ templatesRouter.get('/:id', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'Template not found' });
       return;
     }
-    res.json(template);
+    const version = await getLatestTemplateVersion(req.params.id);
+    res.json({ ...template, schema: version?.schema ?? null });
   } catch (error) {
     handleError(res, error);
   }
