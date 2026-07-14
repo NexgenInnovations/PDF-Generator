@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Designer } from '@pdfme/ui';
 import { generate } from '@pdfme/generator';
-import { getInputFromTemplate, isBlankPdf, type Template } from '@pdfme/common';
+import { checkTemplate, getInputFromTemplate, isBlankPdf, type Template } from '@pdfme/common';
 import {
   AlertCircle, ArrowLeft, Save, Loader2,
   FileJson, FileDown, RotateCcw, Copy, FileUp, Layout, Sparkles, Printer,
@@ -216,6 +216,12 @@ export default function TemplateDesigner() {
 
   const handleAiTemplateReady = (template: Template) => {
     if (!designerRef.current) return;
+    try {
+      checkTemplate(template);
+    } catch (e) {
+      setError(`AI generated an invalid template: ${(e as Error).message}`);
+      return;
+    }
     designerRef.current.updateTemplate(template);
     setAiOpen(false);
   };
