@@ -5,12 +5,13 @@ import { isBlankPdf, type Template } from '@pdfme/common';
 import {
   AlertCircle, ArrowLeft, Save, Loader2,
   FileJson, FileDown, RotateCcw, Copy, FileUp, Layout, Sparkles,
-  RectangleVertical, RectangleHorizontal,
+  RectangleVertical, RectangleHorizontal, PanelTop,
 } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { getFonts, getPlugins } from '../lib/pdfme.js';
 import { Input } from '../components/ui/input.js';
 import AskAiPanel from '../components/AskAiPanel.js';
+import HeaderFooterEditor from '../components/HeaderFooterEditor.js';
 
 const BLANK_TEMPLATE: Template = {
   basePdf: { width: 210, height: 297, padding: [10, 10, 10, 10] },
@@ -38,17 +39,19 @@ function matchPageSizeName(width: number, height: number): PageSizeName | null {
 }
 
 function ToolbarBtn({
-  icon, label, onClick, accent,
+  icon, label, onClick, accent, disabled,
 }: {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
   accent?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-all duration-150"
+      disabled={disabled}
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
       style={accent ? {
         background: '#000',
         color: '#fff',
@@ -115,6 +118,7 @@ export default function TemplateDesigner() {
   const [jsonOpen, setJsonOpen] = useState(false);
   const [jsonText, setJsonText] = useState('');
   const [aiOpen, setAiOpen] = useState(false);
+  const [headerFooterOpen, setHeaderFooterOpen] = useState(false);
   const [, setTemplateVersion] = useState(0);
 
   const currentBasePdf = designerRef.current?.getTemplate().basePdf;
@@ -212,6 +216,18 @@ export default function TemplateDesigner() {
     if (!designerRef.current) return;
     designerRef.current.updateTemplate(template);
     setAiOpen(false);
+  };
+
+  const handleHeaderFooterSave = (staticSchema: import('@pdfme/common').Schema[]) => {
+    if (!designerRef.current) return;
+    const t = designerRef.current.getTemplate();
+    if (!isBlankPdf(t.basePdf)) return;
+    designerRef.current.updateTemplate({
+      ...t,
+      basePdf: { ...t.basePdf, staticSchema },
+    });
+    setTemplateVersion(v => v + 1);
+    setHeaderFooterOpen(false);
   };
 
   const applyBasePdfPatch = (patch: { width: number; height: number }) => {
@@ -402,6 +418,12 @@ export default function TemplateDesigner() {
 
         <Group label="Edit">
           <ToolbarBtn icon={<Layout size={13} />} label="Static schema" onClick={handleStaticSchema} />
+          <ToolbarBtn
+            icon={<PanelTop size={13} />}
+            label="Header/Footer"
+            onClick={() => setHeaderFooterOpen(true)}
+            disabled={!isBlank}
+          />
           <ToolbarBtn icon={<FileJson size={13} />} label="JSON" onClick={handleOpenJson} />
           <ToolbarBtn icon={<Sparkles size={13} />} label="Ask AI" onClick={() => setAiOpen(true)} />
         </Group>
@@ -481,6 +503,15 @@ export default function TemplateDesigner() {
       {/* AI form builder panel */}
       {aiOpen && (
         <AskAiPanel onClose={() => setAiOpen(false)} onTemplateReady={handleAiTemplateReady} />
+      )}
+
+      {/* Header & Footer editor */}
+      {headerFooterOpen && currentBasePdf && isBlankPdf(currentBasePdf) && (
+        <HeaderFooterEditor
+          basePdf={currentBasePdf}
+          onSave={handleHeaderFooterSave}
+          onClose={() => setHeaderFooterOpen(false)}
+        />
       )}
 
       {/* Designer canvas */}
