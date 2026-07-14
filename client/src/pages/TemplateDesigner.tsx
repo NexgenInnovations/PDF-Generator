@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Designer } from '@pdfme/ui';
-import { type Template } from '@pdfme/common';
+import { isBlankPdf, type Template } from '@pdfme/common';
 import {
   AlertCircle, ArrowLeft, Save, Loader2,
-  FileJson, FileDown, RotateCcw, Copy, FileUp, Layout,
+  FileJson, FileDown, RotateCcw, Copy, FileUp, Layout, Sparkles,
+  RectangleVertical, RectangleHorizontal, Printer, PanelTop,
 } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { getFonts, getPlugins } from '../lib/pdfme.js';
@@ -14,6 +15,26 @@ const BLANK_TEMPLATE: Template = {
   basePdf: { width: 210, height: 297, padding: [10, 10, 10, 10] },
   schemas: [[]],
 };
+
+type PageSizeName = 'A4' | 'Letter' | 'Legal';
+
+const PAGE_SIZES_PORTRAIT_MM: Record<PageSizeName, { width: number; height: number }> = {
+  A4: { width: 210, height: 297 },
+  Letter: { width: 215.9, height: 279.4 },
+  Legal: { width: 215.9, height: 355.6 },
+};
+
+function matchPageSizeName(width: number, height: number): PageSizeName | null {
+  const w = Math.min(width, height);
+  const h = Math.max(width, height);
+  for (const name of Object.keys(PAGE_SIZES_PORTRAIT_MM) as PageSizeName[]) {
+    const size = PAGE_SIZES_PORTRAIT_MM[name];
+    if (Math.abs(size.width - w) < 0.1 && Math.abs(size.height - h) < 0.1) {
+      return name;
+    }
+  }
+  return null;
+}
 
 function ToolbarBtn({
   icon, label, onClick, accent,
@@ -92,6 +113,17 @@ export default function TemplateDesigner() {
   const [error, setError] = useState<string | null>(null);
   const [jsonOpen, setJsonOpen] = useState(false);
   const [jsonText, setJsonText] = useState('');
+  const [aiOpen, setAiOpen] = useState(false);
+  const [templateVersion, setTemplateVersion] = useState(0);
+
+  const currentBasePdf = designerRef.current?.getTemplate().basePdf;
+  const isBlank = currentBasePdf ? isBlankPdf(currentBasePdf) : false;
+  const currentSizeName = isBlank && currentBasePdf && typeof currentBasePdf === 'object' && 'width' in currentBasePdf
+    ? matchPageSizeName((currentBasePdf as { width: number; height: number }).width, (currentBasePdf as { width: number; height: number }).height)
+    : null;
+  const currentOrientation = isBlank && currentBasePdf && typeof currentBasePdf === 'object' && 'width' in currentBasePdf
+    ? ((currentBasePdf as { width: number; height: number }).width <= (currentBasePdf as { width: number; height: number }).height ? 'portrait' : 'landscape')
+    : 'portrait';
 
   useEffect(() => {
     let mounted = true;
@@ -160,6 +192,7 @@ export default function TemplateDesigner() {
     if (!designerRef.current) return;
     if (!confirm('Reset the canvas? All unsaved changes will be lost.')) return;
     designerRef.current.updateTemplate(BLANK_TEMPLATE);
+    setTemplateVersion(v => v + 1);
   };
 
   const handleStaticSchema = () => {
@@ -171,6 +204,42 @@ export default function TemplateDesigner() {
     } else {
       designerRef.current.updateTemplate({ ...t, schemas: [...t.schemas, []] });
     }
+  };
+
+  const applyBasePdfPatch = (patch: { width: number; height: number }) => {
+    if (!designerRef.current) return;
+    const t = designerRef.current.getTemplate();
+    if (!isBlankPdf(t.basePdf)) return;
+    const hasFields = t.schemas[0]?.length > 0;
+    if (hasFields && !confirm('Changing the page size may move fields outside the page. Continue?')) {
+      return;
+    }
+    designerRef.current.updateTemplate({
+      ...t,
+      basePdf: { ...t.basePdf, ...patch },
+    });
+    setTemplateVersion(v => v + 1);
+  };
+
+  const handlePageSizeChange = (sizeName: PageSizeName) => {
+    if (!designerRef.current) return;
+    const t = designerRef.current.getTemplate();
+    if (!isBlankPdf(t.basePdf)) return;
+    const base = PAGE_SIZES_PORTRAIT_MM[sizeName];
+    const landscape = t.basePdf.width > t.basePdf.height;
+    applyBasePdfPatch(landscape
+      ? { width: base.height, height: base.width }
+      : { width: base.width, height: base.height });
+  };
+
+  const handleOrientationChange = (orientation: 'portrait' | 'landscape') => {
+    if (!designerRef.current) return;
+    const t = designerRef.current.getTemplate();
+    if (!isBlankPdf(t.basePdf)) return;
+    const { width, height } = t.basePdf;
+    const isLandscape = width > height;
+    if ((orientation === 'landscape') === isLandscape) return;
+    applyBasePdfPatch({ width: height, height: width });
   };
 
   const handleOpenJson = () => {
@@ -211,6 +280,7 @@ export default function TemplateDesigner() {
       const dataUrl = reader.result as string;
       const t = designerRef.current!.getTemplate();
       designerRef.current!.updateTemplate({ ...t, basePdf: dataUrl });
+      setTemplateVersion(v => v + 1);
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -281,6 +351,40 @@ export default function TemplateDesigner() {
         className="flex items-end gap-4 px-4 py-2"
         style={{ ...barStyle }}
       >
+        <Group label="Page">
+          <select
+            value={currentSizeName ?? ''}
+            disabled={!isBlank}
+            onChange={e => handlePageSizeChange(e.target.value as PageSizeName)}
+            className="h-[26px] px-2 text-xs font-semibold disabled:opacity-40"
+            style={{
+              background: 'transparent',
+              color: 'rgba(0,0,0,0.55)',
+              borderRadius: 50,
+              border: '1px solid #e6e6e6',
+            }}
+          >
+            <option value="" disabled>Size</option>
+            <option value="A4">A4</option>
+            <option value="Letter">Letter</option>
+            <option value="Legal">Legal</option>
+          </select>
+          <ToolbarBtn
+            icon={<RectangleVertical size={13} />}
+            label="Portrait"
+            onClick={() => handleOrientationChange('portrait')}
+            accent={isBlank && currentOrientation === 'portrait'}
+          />
+          <ToolbarBtn
+            icon={<RectangleHorizontal size={13} />}
+            label="Landscape"
+            onClick={() => handleOrientationChange('landscape')}
+            accent={isBlank && currentOrientation === 'landscape'}
+          />
+        </Group>
+
+        <Sep />
+
         <Group label="Base PDF">
           <ToolbarBtn icon={<FileUp size={13} />} label="Change PDF" onClick={handleChangePdf} />
           <input ref={basePdfInputRef} type="file" accept="application/pdf" style={{ display: 'none' }} onChange={handleBasePdfFile} />
