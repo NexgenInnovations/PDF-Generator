@@ -5,7 +5,7 @@ import type { Plugin } from 'vite';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const apiProxyTarget = process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3001';
+const apiProxyTarget = process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3004';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dayjsEsmEntry = resolve(__dirname, 'node_modules/dayjs/esm/index.js');
 

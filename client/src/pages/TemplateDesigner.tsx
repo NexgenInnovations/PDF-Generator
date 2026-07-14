@@ -5,11 +5,12 @@ import { isBlankPdf, type Template } from '@pdfme/common';
 import {
   AlertCircle, ArrowLeft, Save, Loader2,
   FileJson, FileDown, RotateCcw, Copy, FileUp, Layout, Sparkles,
-  RectangleVertical, RectangleHorizontal, Printer, PanelTop,
+  RectangleVertical, RectangleHorizontal,
 } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { getFonts, getPlugins } from '../lib/pdfme.js';
 import { Input } from '../components/ui/input.js';
+import AskAiPanel from '../components/AskAiPanel.js';
 
 const BLANK_TEMPLATE: Template = {
   basePdf: { width: 210, height: 297, padding: [10, 10, 10, 10] },
@@ -114,7 +115,7 @@ export default function TemplateDesigner() {
   const [jsonOpen, setJsonOpen] = useState(false);
   const [jsonText, setJsonText] = useState('');
   const [aiOpen, setAiOpen] = useState(false);
-  const [templateVersion, setTemplateVersion] = useState(0);
+  const [, setTemplateVersion] = useState(0);
 
   const currentBasePdf = designerRef.current?.getTemplate().basePdf;
   const isBlank = currentBasePdf ? isBlankPdf(currentBasePdf) : false;
@@ -143,6 +144,7 @@ export default function TemplateDesigner() {
         options: { font: getFonts(), lang: 'en' },
         plugins: getPlugins(),
       });
+      setTemplateVersion(v => v + 1);
     };
 
     init().catch((e: Error) => setError(e.message));
@@ -204,6 +206,12 @@ export default function TemplateDesigner() {
     } else {
       designerRef.current.updateTemplate({ ...t, schemas: [...t.schemas, []] });
     }
+  };
+
+  const handleAiTemplateReady = (template: Template) => {
+    if (!designerRef.current) return;
+    designerRef.current.updateTemplate(template);
+    setAiOpen(false);
   };
 
   const applyBasePdfPatch = (patch: { width: number; height: number }) => {
@@ -395,6 +403,7 @@ export default function TemplateDesigner() {
         <Group label="Edit">
           <ToolbarBtn icon={<Layout size={13} />} label="Static schema" onClick={handleStaticSchema} />
           <ToolbarBtn icon={<FileJson size={13} />} label="JSON" onClick={handleOpenJson} />
+          <ToolbarBtn icon={<Sparkles size={13} />} label="Ask AI" onClick={() => setAiOpen(true)} />
         </Group>
 
         <Sep />
@@ -467,6 +476,11 @@ export default function TemplateDesigner() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* AI form builder panel */}
+      {aiOpen && (
+        <AskAiPanel onClose={() => setAiOpen(false)} onTemplateReady={handleAiTemplateReady} />
       )}
 
       {/* Designer canvas */}

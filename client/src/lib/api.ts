@@ -1,9 +1,19 @@
 import type {
   TemplateRecord,
   TemplateSummary,
-  FilledPdfRecord,
 } from "../types.js";
 import type { Template } from "@pdfme/common";
+
+export interface AiChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface AiFormChatResponse {
+  done: boolean;
+  message: string;
+  template?: Template;
+}
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "/api").replace(/\/$/, "");
 
@@ -50,10 +60,22 @@ export const api = {
   deleteTemplate: (id: string) =>
     request<void>(`/templates/${id}`, { method: "DELETE" }),
 
-  createFilledPdf: (template_id: string, inputs: Record<string, string>[]) =>
-    request<FilledPdfRecord>("/filled-pdfs", {
+  createFilledPdf: async (template_id: string, inputs: Record<string, string>[]) => {
+    const res = await fetch(API_BASE + "/generate-pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ template_id, inputs }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`${res.status} ${text}`);
+    }
+  },
+
+  aiFormChat: (messages: AiChatMessage[]) =>
+    request<AiFormChatResponse>("/ai-form/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages }),
     }),
 };
