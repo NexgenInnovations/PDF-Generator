@@ -18,3 +18,4 @@ server/outputs/*.pdf
 server/data/
 .claude/
 .env
+.superpowers/
