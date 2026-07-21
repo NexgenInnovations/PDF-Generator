@@ -7,46 +7,51 @@
    ══════════════════════════════════════════ */
 
 :root {
-  /* Core */
-  --nx-ink:           #000000;
+  /* Surfaces */
   --nx-canvas:        #ffffff;
-  --nx-surface:       #f7f7f5;
-  --nx-hairline:      #e6e6e6;
-  --nx-hairline-soft: #f1f1f1;
+  --nx-surface:       #f7fafc;
+  --nx-surface-tint:  #f5f3ff;  /* active/selected nav background */
+  --nx-hairline:      #e3e8ef;
 
-  /* Pastel color blocks */
-  --nx-lime:   #dceeb1;
-  --nx-lilac:  #c5b0f4;
-  --nx-cream:  #f4ecd6;
-  --nx-pink:   #efd4d4;
-  --nx-mint:   #c8e6cd;
-  --nx-coral:  #f3c9b6;
-  --nx-navy:   #1f1d3d;
+  /* Ink */
+  --nx-ink:            #0a2540;  /* headings, primary text */
+  --nx-ink-secondary:  #425466;  /* body text */
+  --nx-ink-muted:      #8792a2;  /* labels, captions, placeholders */
 
   /* Accent */
-  --nx-magenta: #ff3d8b;
-  --nx-success: #1ea64a;
+  --nx-accent:         #635bff;  /* primary actions, active states */
+  --nx-accent-tint:    #f5f3ff;  /* light accent background (badges, active nav) */
 
-  /* Tailwind semantic tokens */
+  /* Semantic */
+  --nx-success:        #0e6245;
+  --nx-success-tint:   #e3f9e5;
+  --nx-destructive:    #dc2626;
+  --nx-destructive-tint: #fef2f2;
+
+  /* Shape */
+  --nx-radius-sm: 6px;
+  --nx-radius-md: 8px;
+
+  /* Tailwind semantic tokens (kept in sync with the above) */
   --background:        0 0% 100%;
-  --foreground:        0 0% 0%;
-  --card:              0 0% 97%;
-  --card-foreground:   0 0% 0%;
+  --foreground:        210 55% 10%;
+  --card:              0 0% 100%;
+  --card-foreground:   210 55% 10%;
   --popover:           0 0% 100%;
-  --popover-foreground:0 0% 0%;
-  --primary:           0 0% 0%;
+  --popover-foreground:210 55% 10%;
+  --primary:           245 100% 68%;
   --primary-foreground:0 0% 100%;
-  --secondary:         0 0% 97%;
-  --secondary-foreground:0 0% 0%;
-  --muted:             0 0% 97%;
-  --muted-foreground:  0 0% 45%;
-  --accent:            0 0% 97%;
-  --accent-foreground: 0 0% 0%;
+  --secondary:         220 20% 97%;
+  --secondary-foreground:210 25% 32%;
+  --muted:             220 20% 97%;
+  --muted-foreground:  216 12% 55%;
+  --accent:            256 100% 97%;
+  --accent-foreground: 245 100% 68%;
   --destructive:       0 72% 51%;
   --destructive-foreground:0 0% 100%;
-  --border:            0 0% 90%;
+  --border:            216 20% 91%;
   --input:             0 0% 100%;
-  --ring:              0 0% 0%;
+  --ring:              245 100% 68%;
   --radius:            0.5rem;
 }
 
@@ -61,24 +66,6 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-
-/* ── Monotype eyebrow / caption helpers ── */
-.nx-mono {
-  font-family: 'Geist Mono', 'JetBrains Mono', monospace;
-  font-size: 11px;
-  font-weight: 400;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-/* ── Color block helpers ── */
-.nx-block-lime   { background: #dceeb1; color: #000; }
-.nx-block-lilac  { background: #c5b0f4; color: #000; }
-.nx-block-cream  { background: #f4ecd6; color: #000; }
-.nx-block-pink   { background: #efd4d4; color: #000; }
-.nx-block-mint   { background: #c8e6cd; color: #000; }
-.nx-block-coral  { background: #f3c9b6; color: #000; }
-.nx-block-navy   { background: #1f1d3d; color: #fff; }
 
 /* ── Route-change progress bar (top of screen) ── */
 @keyframes nx-progress {
