@@ -28,7 +28,8 @@ export default function ApiPayloadModal(props: {
     inputs: buildInputs(template, mode),
   };
   const bodyText = JSON.stringify(body, null, 2);
-  const curlText = `curl -X POST ${url} \\\n  -H 'Content-Type: application/json' \\\n  -d '${bodyText}'`;
+  const shellEscapedBody = bodyText.replace(/'/g, `'\\''`);
+  const curlText = `curl -X POST ${url} \\\n  -H 'Content-Type: application/json' \\\n  -d '${shellEscapedBody}'`;
 
   const copyBody = () => { void navigator.clipboard.writeText(bodyText); };
   const copyCurl = () => { void navigator.clipboard.writeText(curlText); };
