@@ -6,13 +6,14 @@ import { checkTemplate, getInputFromTemplate, isBlankPdf, type Template } from '
 import {
   AlertCircle, ArrowLeft, Save, Loader2,
   FileJson, FileDown, RotateCcw, Copy, FileUp, Layout, Sparkles, Printer,
-  RectangleVertical, RectangleHorizontal, PanelTop,
+  RectangleVertical, RectangleHorizontal, PanelTop, Code,
 } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { getFonts, getPlugins } from '../lib/pdfme.js';
 import { Input } from '../components/ui/input.js';
 import AskAiPanel from '../components/AskAiPanel.js';
 import HeaderFooterEditor from '../components/HeaderFooterEditor.js';
+import ApiPayloadModal from '../components/ApiPayloadModal.js';
 
 const BLANK_TEMPLATE: Template = {
   basePdf: { width: 210, height: 297, padding: [10, 10, 10, 10] },
@@ -121,6 +122,7 @@ export default function TemplateDesigner() {
   const [jsonText, setJsonText] = useState('');
   const [aiOpen, setAiOpen] = useState(false);
   const [headerFooterOpen, setHeaderFooterOpen] = useState(false);
+  const [apiPayloadOpen, setApiPayloadOpen] = useState(false);
   const [, setTemplateVersion] = useState(0);
 
   const currentBasePdf = designerRef.current?.getTemplate().basePdf;
@@ -477,6 +479,7 @@ export default function TemplateDesigner() {
             onClick={handleGeneratePdf}
             disabled={generating}
           />
+          <ToolbarBtn icon={<Code size={13} />} label="API" onClick={() => setApiPayloadOpen(true)} />
         </Group>
       </div>
 
@@ -548,6 +551,15 @@ export default function TemplateDesigner() {
           basePdf={currentBasePdf}
           onSave={handleHeaderFooterSave}
           onClose={() => setHeaderFooterOpen(false)}
+        />
+      )}
+
+      {/* API payload modal */}
+      {apiPayloadOpen && (
+        <ApiPayloadModal
+          templateId={id ?? null}
+          template={designerRef.current?.getTemplate() ?? BLANK_TEMPLATE}
+          onClose={() => setApiPayloadOpen(false)}
         />
       )}
 
