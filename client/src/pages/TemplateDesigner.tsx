@@ -117,7 +117,7 @@ function PublishModal({
   onClose: () => void;
 }) {
   const [mode, setMode] = useState<'new' | 'replace'>('new');
-  const [tag, setTag] = useState('');
+  const [tag, setTag] = useState(publishedVersions.length === 0 ? 'v1' : '');
   const [replaceVersion, setReplaceVersion] = useState<number | null>(publishedVersions[0]?.version ?? null);
 
   const handleReplaceVersionChange = (version: number) => {
@@ -132,7 +132,7 @@ function PublishModal({
       const existing = publishedVersions.find(v => v.version === replaceVersion);
       setTag(existing?.tag ?? '');
     } else if (newMode === 'new') {
-      setTag('');
+      setTag(publishedVersions.length === 0 ? 'v1' : '');
     }
   };
 

@@ -102,7 +102,7 @@ async function ensureTables(): Promise<void> {
   // created without manual data cleanup).
   await p.request().query(`
     UPDATE template_versions
-    SET tag = 'legacy-v' + CAST(version AS NVARCHAR(20))
+    SET tag = 'v' + CAST(version AS NVARCHAR(20))
     WHERE status = 'published' AND tag IS NULL
   `);
 
