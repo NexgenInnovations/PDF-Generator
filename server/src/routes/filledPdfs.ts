@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { generatePdf } from '../services/pdfService.js';
-import { getTemplate, getLatestTemplateVersion, createFilledSubmission, createGeneratedPdf } from '../db.js';
+import { getTemplate, getPublishedVersion, getLatestPublishedVersion, createFilledSubmission, createGeneratedPdf } from '../db.js';
 import type { Template } from '@pdfme/common';
 
 export const generatePdfRouter = Router();
@@ -75,9 +75,11 @@ export const generatePdfRouter = Router();
  *               $ref: '#/components/schemas/Error'
  */
 generatePdfRouter.post('/', async (req: Request, res: Response) => {
-  const { template_id, inputs } = req.body as {
+  const { template_id, inputs, version, tag } = req.body as {
     template_id?: string;
     inputs?: Record<string, string>[];
+    version?: number;
+    tag?: string;
   };
 
   if (!template_id || !Array.isArray(inputs) || inputs.length === 0) {
@@ -92,26 +94,31 @@ generatePdfRouter.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const latestVersion = await getLatestTemplateVersion(template_id);
-    if (!latestVersion) {
-      res.status(404).json({ error: 'No template version found' });
+    const resolvedVersion = version !== undefined
+      ? await getPublishedVersion(template_id, { version })
+      : tag !== undefined
+        ? await getPublishedVersion(template_id, { tag })
+        : await getLatestPublishedVersion(template_id);
+
+    if (!resolvedVersion) {
+      res.status(404).json({ error: 'No published version found' });
       return;
     }
 
-    const pdf = await generatePdf(latestVersion.schema as Template, inputs);
+    const pdf = await generatePdf(resolvedVersion.schema as Template, inputs);
 
     try {
       const submission = await createFilledSubmission(
         template_id,
-        latestVersion.version,
+        resolvedVersion.version,
         inputs
       );
       await createGeneratedPdf({
         submissionId: submission.id,
         templateId: template_id,
-        templateVersion: latestVersion.version,
+        templateVersion: resolvedVersion.version,
         inputsSnapshot: inputs,
-        schemaSnapshot: latestVersion.schema,
+        schemaSnapshot: resolvedVersion.schema,
         filePath: 'generated-in-memory',
         fileSizeBytes: pdf.length,
       });
