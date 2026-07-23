@@ -50,12 +50,31 @@ async function ensureTables(): Promise<void> {
       id          UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
       template_id UNIQUEIDENTIFIER NOT NULL REFERENCES pdf_templates(id) ON DELETE CASCADE,
       version     INT              NOT NULL,
+      status      NVARCHAR(20)     NOT NULL DEFAULT 'published',
+      tag         NVARCHAR(255)    NULL,
       [schema]    NVARCHAR(MAX)    NOT NULL,
       base_pdf    NVARCHAR(MAX)    NOT NULL,
       [schemas]   NVARCHAR(MAX)    NOT NULL,
       created_at  DATETIME2        NOT NULL DEFAULT GETUTCDATE(),
       CONSTRAINT uq_template_version UNIQUE (template_id, version)
     )
+  `);
+
+  await p.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('template_versions') AND name = 'status')
+    ALTER TABLE template_versions ADD status NVARCHAR(20) NOT NULL DEFAULT 'published'
+  `);
+
+  await p.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('template_versions') AND name = 'tag')
+    ALTER TABLE template_versions ADD tag NVARCHAR(255) NULL
+  `);
+
+  await p.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'uq_template_versions_tag' AND object_id = OBJECT_ID('template_versions'))
+    CREATE UNIQUE INDEX uq_template_versions_tag
+      ON template_versions(template_id, tag)
+      WHERE status = 'published'
   `);
 
   await p.request().query(`
@@ -101,6 +120,8 @@ export interface TemplateVersionRow {
   id: string;
   template_id: string;
   version: number;
+  status: 'draft' | 'published';
+  tag: string | null;
   schema: unknown;
   base_pdf: unknown;
   schemas: unknown;
@@ -181,116 +202,196 @@ export async function deleteTemplate(id: string): Promise<void> {
 
 // ─── template_versions ───────────────────────────────────────────────────────
 
-export async function createTemplateVersion(
+function parseVersionRow(row: Record<string, unknown>): TemplateVersionRow {
+  return {
+    ...row,
+    schema: JSON.parse(row.schema as string),
+    base_pdf: JSON.parse(row.base_pdf as string),
+    schemas: JSON.parse(row.schemas as string),
+  } as TemplateVersionRow;
+}
+
+export async function saveDraft(templateId: string, schema: unknown): Promise<TemplateVersionRow> {
+  const p = getPool();
+  const schemaObj = schema as { basePdf?: unknown; schemas?: unknown };
+  const schemaVal = JSON.stringify(schema);
+  const basePdfVal = JSON.stringify(schemaObj.basePdf ?? null);
+  const schemasVal = JSON.stringify(schemaObj.schemas ?? null);
+
+  const existing = await p.request()
+    .input('tid', sql.UniqueIdentifier, templateId)
+    .query(`SELECT id FROM template_versions WHERE template_id = @tid AND status = 'draft'`);
+
+  if (existing.recordset[0]) {
+    const result = await p.request()
+      .input('id', sql.UniqueIdentifier, existing.recordset[0].id)
+      .input('schema_val', sql.NVarChar(sql.MAX), schemaVal)
+      .input('base_pdf', sql.NVarChar(sql.MAX), basePdfVal)
+      .input('schemas_val', sql.NVarChar(sql.MAX), schemasVal)
+      .query(`
+        UPDATE template_versions
+        SET [schema] = @schema_val, base_pdf = @base_pdf, [schemas] = @schemas_val, created_at = GETUTCDATE()
+        OUTPUT INSERTED.id, INSERTED.template_id, INSERTED.version, INSERTED.status, INSERTED.tag,
+               INSERTED.[schema], INSERTED.base_pdf, INSERTED.[schemas], INSERTED.created_at
+        WHERE id = @id
+      `);
+    return parseVersionRow(result.recordset[0]);
+  }
+
+  const templateResult = await p.request()
+    .input('tid', sql.UniqueIdentifier, templateId)
+    .query('SELECT current_version FROM pdf_templates WHERE id = @tid');
+  if (!templateResult.recordset[0]) throw new Error('Template not found');
+  const version = templateResult.recordset[0].current_version as number;
+
+  const insertResult = await p.request()
+    .input('tid', sql.UniqueIdentifier, templateId)
+    .input('version', sql.Int, version)
+    .input('schema_val', sql.NVarChar(sql.MAX), schemaVal)
+    .input('base_pdf', sql.NVarChar(sql.MAX), basePdfVal)
+    .input('schemas_val', sql.NVarChar(sql.MAX), schemasVal)
+    .query(`
+      INSERT INTO template_versions (template_id, version, status, tag, [schema], base_pdf, [schemas])
+      OUTPUT INSERTED.id, INSERTED.template_id, INSERTED.version, INSERTED.status, INSERTED.tag,
+             INSERTED.[schema], INSERTED.base_pdf, INSERTED.[schemas], INSERTED.created_at
+      VALUES (@tid, @version, 'draft', NULL, @schema_val, @base_pdf, @schemas_val)
+    `);
+  return parseVersionRow(insertResult.recordset[0]);
+}
+
+export async function getDraft(templateId: string): Promise<TemplateVersionRow | null> {
+  const result = await getPool()
+    .request()
+    .input('tid', sql.UniqueIdentifier, templateId)
+    .query(`
+      SELECT id, template_id, version, status, tag, [schema], base_pdf, [schemas], created_at
+      FROM template_versions
+      WHERE template_id = @tid AND status = 'draft'
+    `);
+  const row = result.recordset[0];
+  return row ? parseVersionRow(row) : null;
+}
+
+export async function publishVersion(
   templateId: string,
-  schema: unknown
+  schema: unknown,
+  tag: string,
+  target: { mode: 'new' } | { mode: 'replace'; version: number }
 ): Promise<TemplateVersionRow> {
   const p = getPool();
   const transaction = new sql.Transaction(p);
   await transaction.begin();
   try {
     const schemaObj = schema as { basePdf?: unknown; schemas?: unknown };
+    const schemaVal = JSON.stringify(schema);
+    const basePdfVal = JSON.stringify(schemaObj.basePdf ?? null);
+    const schemasVal = JSON.stringify(schemaObj.schemas ?? null);
 
-    // Increment version counter and get new value
-    const versionResult = await transaction.request()
-      .input('tid', sql.UniqueIdentifier, templateId)
-      .query(`
-        UPDATE pdf_templates
-        SET current_version = current_version + 1, updated_at = GETUTCDATE()
-        OUTPUT INSERTED.current_version
-        WHERE id = @tid
-      `);
-    if (!versionResult.recordset[0]) throw new Error('Template not found');
-    const version = versionResult.recordset[0].current_version as number;
+    let row: Record<string, unknown>;
 
-    const insertResult = await transaction.request()
-      .input('tid', sql.UniqueIdentifier, templateId)
-      .input('version', sql.Int, version)
-      .input('schema_val', sql.NVarChar(sql.MAX), JSON.stringify(schema))
-      .input('base_pdf', sql.NVarChar(sql.MAX), JSON.stringify(schemaObj.basePdf ?? null))
-      .input('schemas_val', sql.NVarChar(sql.MAX), JSON.stringify(schemaObj.schemas ?? null))
-      .query(`
-        INSERT INTO template_versions (template_id, version, [schema], base_pdf, [schemas])
-        OUTPUT INSERTED.id, INSERTED.template_id, INSERTED.version,
-               INSERTED.[schema], INSERTED.base_pdf, INSERTED.[schemas], INSERTED.created_at
-        VALUES (@tid, @version, @schema_val, @base_pdf, @schemas_val)
-      `);
+    if (target.mode === 'new') {
+      const versionResult = await transaction.request()
+        .input('tid', sql.UniqueIdentifier, templateId)
+        .query(`
+          UPDATE pdf_templates
+          SET current_version = current_version + 1, updated_at = GETUTCDATE()
+          OUTPUT INSERTED.current_version
+          WHERE id = @tid
+        `);
+      if (!versionResult.recordset[0]) throw new Error('Template not found');
+      const version = versionResult.recordset[0].current_version as number;
+
+      const insertResult = await transaction.request()
+        .input('tid', sql.UniqueIdentifier, templateId)
+        .input('version', sql.Int, version)
+        .input('tag', sql.NVarChar(255), tag)
+        .input('schema_val', sql.NVarChar(sql.MAX), schemaVal)
+        .input('base_pdf', sql.NVarChar(sql.MAX), basePdfVal)
+        .input('schemas_val', sql.NVarChar(sql.MAX), schemasVal)
+        .query(`
+          INSERT INTO template_versions (template_id, version, status, tag, [schema], base_pdf, [schemas])
+          OUTPUT INSERTED.id, INSERTED.template_id, INSERTED.version, INSERTED.status, INSERTED.tag,
+                 INSERTED.[schema], INSERTED.base_pdf, INSERTED.[schemas], INSERTED.created_at
+          VALUES (@tid, @version, 'published', @tag, @schema_val, @base_pdf, @schemas_val)
+        `);
+      row = insertResult.recordset[0];
+    } else {
+      const updateResult = await transaction.request()
+        .input('tid', sql.UniqueIdentifier, templateId)
+        .input('version', sql.Int, target.version)
+        .input('tag', sql.NVarChar(255), tag)
+        .input('schema_val', sql.NVarChar(sql.MAX), schemaVal)
+        .input('base_pdf', sql.NVarChar(sql.MAX), basePdfVal)
+        .input('schemas_val', sql.NVarChar(sql.MAX), schemasVal)
+        .query(`
+          UPDATE template_versions
+          SET tag = @tag, [schema] = @schema_val, base_pdf = @base_pdf, [schemas] = @schemas_val, created_at = GETUTCDATE()
+          OUTPUT INSERTED.id, INSERTED.template_id, INSERTED.version, INSERTED.status, INSERTED.tag,
+                 INSERTED.[schema], INSERTED.base_pdf, INSERTED.[schemas], INSERTED.created_at
+          WHERE template_id = @tid AND version = @version AND status = 'published'
+        `);
+      if (!updateResult.recordset[0]) throw new Error('Published version not found');
+      row = updateResult.recordset[0];
+    }
 
     await transaction.commit();
-    const row = insertResult.recordset[0];
-    return {
-      ...row,
-      schema: JSON.parse(row.schema as string ?? row['schema'] as string),
-      base_pdf: JSON.parse(row.base_pdf as string),
-      schemas: JSON.parse(row.schemas as string ?? row['schemas'] as string),
-    };
+    return parseVersionRow(row);
   } catch (e) {
     await transaction.rollback();
     throw e;
   }
 }
 
-export async function listTemplateVersions(templateId: string): Promise<TemplateVersionRow[]> {
+export async function listPublishedVersions(templateId: string): Promise<TemplateVersionRow[]> {
   const result = await getPool()
     .request()
     .input('tid', sql.UniqueIdentifier, templateId)
     .query(`
-      SELECT id, template_id, version, [schema], base_pdf, [schemas], created_at
+      SELECT id, template_id, version, status, tag, [schema], base_pdf, [schemas], created_at
       FROM template_versions
-      WHERE template_id = @tid
+      WHERE template_id = @tid AND status = 'published'
       ORDER BY version DESC
     `);
-  return result.recordset.map(row => ({
-    ...row,
-    schema: JSON.parse(row.schema as string),
-    base_pdf: JSON.parse(row.base_pdf as string),
-    schemas: JSON.parse(row.schemas as string),
-  }));
+  return result.recordset.map(parseVersionRow);
 }
 
-export async function getTemplateVersion(
+export async function getPublishedVersion(
   templateId: string,
-  version: number
+  ref: { version: number } | { tag: string }
 ): Promise<TemplateVersionRow | null> {
-  const result = await getPool()
-    .request()
-    .input('tid', sql.UniqueIdentifier, templateId)
-    .input('version', sql.Int, version)
-    .query(`
-      SELECT id, template_id, version, [schema], base_pdf, [schemas], created_at
-      FROM template_versions
-      WHERE template_id = @tid AND version = @version
-    `);
+  const request = getPool().request().input('tid', sql.UniqueIdentifier, templateId);
+  let result;
+  if ('version' in ref) {
+    result = await request
+      .input('version', sql.Int, ref.version)
+      .query(`
+        SELECT id, template_id, version, status, tag, [schema], base_pdf, [schemas], created_at
+        FROM template_versions WHERE template_id = @tid AND version = @version AND status = 'published'
+      `);
+  } else {
+    result = await request
+      .input('tag', sql.NVarChar(255), ref.tag)
+      .query(`
+        SELECT id, template_id, version, status, tag, [schema], base_pdf, [schemas], created_at
+        FROM template_versions WHERE template_id = @tid AND tag = @tag AND status = 'published'
+      `);
+  }
   const row = result.recordset[0];
-  if (!row) return null;
-  return {
-    ...row,
-    schema: JSON.parse(row.schema as string),
-    base_pdf: JSON.parse(row.base_pdf as string),
-    schemas: JSON.parse(row.schemas as string),
-  };
+  return row ? parseVersionRow(row) : null;
 }
 
-export async function getLatestTemplateVersion(
-  templateId: string
-): Promise<TemplateVersionRow | null> {
+export async function getLatestPublishedVersion(templateId: string): Promise<TemplateVersionRow | null> {
   const result = await getPool()
     .request()
     .input('tid', sql.UniqueIdentifier, templateId)
     .query(`
-      SELECT tv.id, tv.template_id, tv.version, tv.[schema], tv.base_pdf, tv.[schemas], tv.created_at
-      FROM template_versions tv
-      JOIN pdf_templates t ON t.id = tv.template_id
-      WHERE tv.template_id = @tid AND tv.version = t.current_version
+      SELECT TOP 1 id, template_id, version, status, tag, [schema], base_pdf, [schemas], created_at
+      FROM template_versions
+      WHERE template_id = @tid AND status = 'published'
+      ORDER BY version DESC
     `);
   const row = result.recordset[0];
-  if (!row) return null;
-  return {
-    ...row,
-    schema: JSON.parse(row.schema as string),
-    base_pdf: JSON.parse(row.base_pdf as string),
-    schemas: JSON.parse(row.schemas as string),
-  };
+  return row ? parseVersionRow(row) : null;
 }
 
 // ─── filled_submissions ───────────────────────────────────────────────────────
