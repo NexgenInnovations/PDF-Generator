@@ -126,6 +126,16 @@ function PublishModal({
     setTag(existing?.tag ?? '');
   };
 
+  const handleModeChange = (newMode: 'new' | 'replace') => {
+    setMode(newMode);
+    if (newMode === 'replace' && replaceVersion !== null) {
+      const existing = publishedVersions.find(v => v.version === replaceVersion);
+      setTag(existing?.tag ?? '');
+    } else if (newMode === 'new') {
+      setTag('');
+    }
+  };
+
   const canSubmit = tag.trim().length > 0 && (mode === 'new' || replaceVersion !== null);
 
   return (
@@ -154,7 +164,7 @@ function PublishModal({
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', gap: 4 }}>
             <button
-              onClick={() => setMode('new')}
+              onClick={() => handleModeChange('new')}
               style={{
                 padding: '6px 14px', borderRadius: 50, fontSize: 12, fontWeight: 600, cursor: 'pointer',
                 border: mode === 'new' ? 'none' : '1px solid #e6e6e6',
@@ -165,7 +175,7 @@ function PublishModal({
               New version
             </button>
             <button
-              onClick={() => setMode('replace')}
+              onClick={() => handleModeChange('replace')}
               disabled={publishedVersions.length === 0}
               style={{
                 padding: '6px 14px', borderRadius: 50, fontSize: 12, fontWeight: 600, cursor: 'pointer',
