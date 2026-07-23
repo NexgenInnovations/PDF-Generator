@@ -38,10 +38,36 @@ async function ensureTables(): Promise<void> {
     CREATE TABLE pdf_templates (
       id              UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
       name            NVARCHAR(255)    NOT NULL,
-      current_version INT              NOT NULL DEFAULT 1,
+      current_version INT              NOT NULL DEFAULT 0,
       created_at      DATETIME2        NOT NULL DEFAULT GETUTCDATE(),
       updated_at      DATETIME2        NOT NULL DEFAULT GETUTCDATE()
     )
+  `);
+
+  // current_version now means "last version number assigned to a published
+  // row" (0 = nothing published yet), not "the table's DEFAULT NEWID()-style
+  // starting number" — drafts use a fixed sentinel version (0) instead of
+  // reading current_version, so publishing the first version always yields
+  // version 1. Re-point the column default on databases created before this
+  // change (existing rows keep their real current_version value, which
+  // already correctly means "last published version number" under the old
+  // model too — no data migration needed, only new templates need the new
+  // default).
+  await p.request().query(`
+    IF EXISTS (
+      SELECT 1 FROM sys.default_constraints dc
+      JOIN sys.columns c ON c.object_id = dc.parent_object_id AND c.column_id = dc.parent_column_id
+      WHERE dc.parent_object_id = OBJECT_ID('pdf_templates') AND c.name = 'current_version' AND dc.definition = '((1))'
+    )
+    BEGIN
+      DECLARE @constraintName NVARCHAR(200);
+      SELECT @constraintName = dc.name
+      FROM sys.default_constraints dc
+      JOIN sys.columns c ON c.object_id = dc.parent_object_id AND c.column_id = dc.parent_column_id
+      WHERE dc.parent_object_id = OBJECT_ID('pdf_templates') AND c.name = 'current_version' AND dc.definition = '((1))';
+      EXEC('ALTER TABLE pdf_templates DROP CONSTRAINT ' + @constraintName);
+      EXEC('ALTER TABLE pdf_templates ADD CONSTRAINT df_pdf_templates_current_version DEFAULT 0 FOR current_version');
+    END
   `);
 
   await p.request().query(`
@@ -248,15 +274,18 @@ export async function saveDraft(templateId: string, schema: unknown): Promise<Te
     return parseVersionRow(result.recordset[0]);
   }
 
-  const templateResult = await p.request()
+  const templateExists = await p.request()
     .input('tid', sql.UniqueIdentifier, templateId)
-    .query('SELECT current_version FROM pdf_templates WHERE id = @tid');
-  if (!templateResult.recordset[0]) throw new Error('Template not found');
-  const version = templateResult.recordset[0].current_version as number;
+    .query('SELECT id FROM pdf_templates WHERE id = @tid');
+  if (!templateExists.recordset[0]) throw new Error('Template not found');
 
+  // Drafts always use the reserved sentinel version 0 — never a real
+  // published version number — so a template's first-ever publish can
+  // start at version 1 without colliding with the draft row under the
+  // UNIQUE (template_id, version) constraint.
   const insertResult = await p.request()
     .input('tid', sql.UniqueIdentifier, templateId)
-    .input('version', sql.Int, version)
+    .input('version', sql.Int, 0)
     .input('schema_val', sql.NVarChar(sql.MAX), schemaVal)
     .input('base_pdf', sql.NVarChar(sql.MAX), basePdfVal)
     .input('schemas_val', sql.NVarChar(sql.MAX), schemasVal)
