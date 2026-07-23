@@ -26,6 +26,75 @@ function Skeleton() {
   );
 }
 
+function FillVersionPicker({ templateId, onClose }: { templateId: string; onClose: () => void }) {
+  const [versions, setVersions] = useState<{ version: number; tag: string | null; created_at: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [copiedVersion, setCopiedVersion] = useState<number | null>(null);
+
+  useEffect(() => {
+    api.listPublishedVersions(templateId)
+      .then(setVersions)
+      .finally(() => setLoading(false));
+  }, [templateId]);
+
+  const copyLink = (version: number) => {
+    const url = `${window.location.origin}/templates/${templateId}/fill?version=${version}`;
+    void navigator.clipboard.writeText(url);
+    setCopiedVersion(version);
+    setTimeout(() => setCopiedVersion(v => (v === version ? null : v)), 1500);
+  };
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 9999,
+        background: 'rgba(0,0,0,0.40)',
+        backdropFilter: 'blur(8px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: '420px',
+          background: '#fff',
+          border: '1px solid var(--nx-hairline)',
+          borderRadius: 16,
+          display: 'flex', flexDirection: 'column',
+          overflow: 'hidden',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.15)',
+        }}
+      >
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--nx-hairline)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--nx-ink)' }}>Share a version to fill</span>
+          <button onClick={onClose} style={{ color: 'var(--nx-ink-muted)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>✕</button>
+        </div>
+        <div style={{ padding: 16, maxHeight: '50vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {loading && <p style={{ fontSize: 13, color: 'var(--nx-ink-muted)' }}>Loading…</p>}
+          {!loading && versions.length === 0 && (
+            <p style={{ fontSize: 13, color: 'var(--nx-ink-muted)' }}>No published versions yet.</p>
+          )}
+          {versions.map(v => (
+            <div
+              key={v.version}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--nx-hairline)' }}
+            >
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--nx-ink)' }}>v{v.version} — {v.tag}</div>
+                <div style={{ fontSize: 11, color: 'var(--nx-ink-muted)' }}>{new Date(v.created_at).toLocaleDateString()}</div>
+              </div>
+              <Button size="sm" variant="secondary" onClick={() => copyLink(v.version)}>
+                {copiedVersion === v.version ? 'Copied!' : 'Copy link'}
+              </Button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TemplateList() {
   const { role } = useRole();
   const navigate = useNavigate();
@@ -33,6 +102,7 @@ export default function TemplateList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [fillPickerTemplateId, setFillPickerTemplateId] = useState<string | null>(null);
 
   useEffect(() => {
     api.listTemplates()
@@ -163,6 +233,11 @@ export default function TemplateList() {
                     </Link>
                   )}
                   {canEdit && (
+                    <Button size="sm" variant="secondary" className="flex-1" onClick={() => setFillPickerTemplateId(t.id)}>
+                      Share Fill Link
+                    </Button>
+                  )}
+                  {canEdit && (
                     <Link to={`/templates/${t.id}/edit`} className="flex-1">
                       <Button size="sm" variant="secondary" className="w-full">
                         <Edit2 className="h-3 w-3" />
@@ -225,6 +300,11 @@ export default function TemplateList() {
                           </Link>
                         )}
                         {canEdit && (
+                          <Button size="sm" variant="secondary" onClick={() => setFillPickerTemplateId(t.id)}>
+                            Share Fill Link
+                          </Button>
+                        )}
+                        {canEdit && (
                           <Link to={`/templates/${t.id}/edit`}>
                             <Button size="sm" variant="secondary">
                               <Edit2 className="h-3 w-3" />
@@ -252,6 +332,13 @@ export default function TemplateList() {
           </Card>
         )}
       </div>
+
+      {fillPickerTemplateId && (
+        <FillVersionPicker
+          templateId={fillPickerTemplateId}
+          onClose={() => setFillPickerTemplateId(null)}
+        />
+      )}
     </AppLayout>
   );
 }
