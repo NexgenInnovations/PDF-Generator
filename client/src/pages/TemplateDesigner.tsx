@@ -6,7 +6,7 @@ import { checkTemplate, getInputFromTemplate, isBlankPdf, type Template } from '
 import {
   AlertCircle, ArrowLeft, Save, Loader2,
   FileJson, FileDown, RotateCcw, Copy, FileUp, Layout, Sparkles, Printer,
-  RectangleVertical, RectangleHorizontal, PanelTop, Code,
+  RectangleVertical, RectangleHorizontal, PanelTop, Code, UploadCloud,
 } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { getFonts, getPlugins } from '../lib/pdfme.js';
@@ -108,6 +108,130 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+function PublishModal({
+  publishedVersions, publishing, onPublish, onClose,
+}: {
+  publishedVersions: { version: number; tag: string | null; created_at: string }[];
+  publishing: boolean;
+  onPublish: (tag: string, target: { mode: 'new' } | { mode: 'replace'; version: number }) => void;
+  onClose: () => void;
+}) {
+  const [mode, setMode] = useState<'new' | 'replace'>('new');
+  const [tag, setTag] = useState('');
+  const [replaceVersion, setReplaceVersion] = useState<number | null>(publishedVersions[0]?.version ?? null);
+
+  const handleReplaceVersionChange = (version: number) => {
+    setReplaceVersion(version);
+    const existing = publishedVersions.find(v => v.version === version);
+    setTag(existing?.tag ?? '');
+  };
+
+  const canSubmit = tag.trim().length > 0 && (mode === 'new' || replaceVersion !== null);
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 9999,
+        background: 'rgba(0,0,0,0.40)',
+        backdropFilter: 'blur(8px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      <div style={{
+        width: '480px',
+        background: '#fff',
+        border: '1px solid #e6e6e6',
+        borderRadius: 16,
+        display: 'flex', flexDirection: 'column',
+        overflow: 'hidden',
+        boxShadow: '0 24px 64px rgba(0,0,0,0.15)',
+      }}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid #e6e6e6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ color: '#000', fontWeight: 700, fontSize: 14 }}>Publish template</span>
+          <button onClick={onClose} style={{ color: 'rgba(0,0,0,0.40)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>✕</button>
+        </div>
+
+        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button
+              onClick={() => setMode('new')}
+              style={{
+                padding: '6px 14px', borderRadius: 50, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                border: mode === 'new' ? 'none' : '1px solid #e6e6e6',
+                background: mode === 'new' ? '#000' : 'transparent',
+                color: mode === 'new' ? '#fff' : 'rgba(0,0,0,0.55)',
+              }}
+            >
+              New version
+            </button>
+            <button
+              onClick={() => setMode('replace')}
+              disabled={publishedVersions.length === 0}
+              style={{
+                padding: '6px 14px', borderRadius: 50, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                border: mode === 'replace' ? 'none' : '1px solid #e6e6e6',
+                background: mode === 'replace' ? '#000' : 'transparent',
+                color: mode === 'replace' ? '#fff' : 'rgba(0,0,0,0.55)',
+                opacity: publishedVersions.length === 0 ? 0.4 : 1,
+              }}
+            >
+              Replace existing
+            </button>
+          </div>
+
+          {mode === 'replace' && (
+            <select
+              value={replaceVersion ?? ''}
+              onChange={e => handleReplaceVersionChange(Number(e.target.value))}
+              style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #e6e6e6', fontSize: 13 }}
+            >
+              {publishedVersions.map(v => (
+                <option key={v.version} value={v.version}>
+                  v{v.version} — {v.tag} ({new Date(v.created_at).toLocaleDateString()})
+                </option>
+              ))}
+            </select>
+          )}
+
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: 'rgba(0,0,0,0.55)', display: 'block', marginBottom: 4 }}>
+              Tag
+            </label>
+            <input
+              type="text"
+              value={tag}
+              onChange={e => setTag(e.target.value)}
+              placeholder="e.g. v1.2 - added tax field"
+              style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #e6e6e6', fontSize: 13, boxSizing: 'border-box' }}
+            />
+          </div>
+        </div>
+
+        <div style={{ padding: '10px 16px', borderTop: '1px solid #e6e6e6', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button
+            onClick={onClose}
+            style={{ padding: '6px 16px', borderRadius: 50, border: '1px solid #e6e6e6', background: 'transparent', color: 'rgba(0,0,0,0.55)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onPublish(tag.trim(), mode === 'new' ? { mode: 'new' } : { mode: 'replace', version: replaceVersion! })}
+            disabled={!canSubmit || publishing}
+            style={{
+              padding: '6px 16px', borderRadius: 50, border: 'none',
+              background: '#000', color: '#fff', fontSize: 12, fontWeight: 600,
+              cursor: canSubmit && !publishing ? 'pointer' : 'not-allowed',
+              opacity: canSubmit && !publishing ? 1 : 0.5,
+            }}
+          >
+            {publishing ? 'Publishing…' : 'Publish'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TemplateDesigner() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -123,6 +247,9 @@ export default function TemplateDesigner() {
   const [aiOpen, setAiOpen] = useState(false);
   const [headerFooterOpen, setHeaderFooterOpen] = useState(false);
   const [apiPayloadOpen, setApiPayloadOpen] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishedVersions, setPublishedVersions] = useState<{ version: number; tag: string | null; created_at: string }[]>([]);
+  const [publishing, setPublishing] = useState(false);
   const [, setTemplateVersion] = useState(0);
 
   const currentBasePdf = designerRef.current?.getTemplate().basePdf;
@@ -142,7 +269,7 @@ export default function TemplateDesigner() {
       let template: Template = BLANK_TEMPLATE;
       if (id) {
         const record = await api.getTemplate(id);
-        template = record.schema as Template;
+        template = (record.draft?.schema ?? record.latestPublished?.schema ?? BLANK_TEMPLATE) as Template;
         if (mounted) setName(record.name);
       }
       if (!mounted || !containerRef.current) return;
@@ -195,6 +322,32 @@ export default function TemplateDesigner() {
       navigate('/templates');
     } catch (e) {
       setError((e as Error).message);
+    }
+  };
+
+  const handleOpenPublish = async () => {
+    if (!id) { setError('Save the template before publishing.'); return; }
+    try {
+      const versions = await api.listPublishedVersions(id);
+      setPublishedVersions(versions);
+      setPublishOpen(true);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const handlePublish = async (tag: string, target: { mode: 'new' } | { mode: 'replace'; version: number }) => {
+    if (!designerRef.current || !id) return;
+    setPublishing(true);
+    setError(null);
+    try {
+      const schema = designerRef.current.getTemplate();
+      await api.publishTemplate(id, schema, tag, target);
+      setPublishOpen(false);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -398,7 +551,7 @@ export default function TemplateDesigner() {
           {saving ? (
             <><Loader2 className="h-3.5 w-3.5 animate-spin" />Saving…</>
           ) : (
-            <><Save className="h-3.5 w-3.5" />Save</>
+            <><Save className="h-3.5 w-3.5" />Save Draft</>
           )}
         </button>
       </div>
@@ -464,9 +617,10 @@ export default function TemplateDesigner() {
         <Sep />
 
         <Group label="Project">
-          <ToolbarBtn icon={<Save size={13} />} label="Save Project" onClick={handleSave} accent />
+          <ToolbarBtn icon={<Save size={13} />} label="Save Draft" onClick={handleSave} accent />
           <ToolbarBtn icon={<Copy size={13} />} label="Save As" onClick={handleSaveAs} />
           <ToolbarBtn icon={<RotateCcw size={13} />} label="Reset" onClick={handleReset} />
+          <ToolbarBtn icon={<UploadCloud size={13} />} label="Publish" onClick={() => void handleOpenPublish()} disabled={!id} />
         </Group>
 
         <Sep />
@@ -560,6 +714,16 @@ export default function TemplateDesigner() {
           templateId={id ?? null}
           template={designerRef.current?.getTemplate() ?? BLANK_TEMPLATE}
           onClose={() => setApiPayloadOpen(false)}
+        />
+      )}
+
+      {/* Publish modal */}
+      {publishOpen && (
+        <PublishModal
+          publishedVersions={publishedVersions}
+          publishing={publishing}
+          onPublish={handlePublish}
+          onClose={() => setPublishOpen(false)}
         />
       )}
 
