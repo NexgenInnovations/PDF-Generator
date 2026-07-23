@@ -7,17 +7,20 @@ import type { TemplateSummary } from '../types.js';
 import { AppLayout } from '../components/layout/AppLayout.js';
 import { TopBar } from '../components/layout/TopBar.js';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '../components/ui/tooltip.js';
-
-const BLOCK_COLORS = ['#dceeb1', '#c5b0f4', '#f4ecd6', '#c8e6cd', '#efd4d4', '#f3c9b6'];
+import { Card } from '../components/ui/card.js';
+import { Button } from '../components/ui/button.js';
 
 function Skeleton() {
   return (
-    <div className="animate-pulse rounded-2xl p-5 space-y-3" style={{ background: '#f7f7f5' }}>
-      <div className="h-3.5 rounded-full bg-black/10 w-3/4" />
-      <div className="h-2.5 rounded-full bg-black/6 w-1/2" />
+    <div
+      className="animate-pulse rounded-[var(--nx-radius-md)] border p-5 space-y-3"
+      style={{ background: 'var(--nx-surface)', borderColor: 'var(--nx-hairline)' }}
+    >
+      <div className="h-3.5 rounded w-3/4" style={{ background: 'var(--nx-hairline)' }} />
+      <div className="h-2.5 rounded w-1/2" style={{ background: 'var(--nx-hairline)' }} />
       <div className="flex gap-2 pt-1">
-        <div className="h-7 rounded-full bg-black/10 w-16" />
-        <div className="h-7 rounded-full bg-black/6 w-16" />
+        <div className="h-7 rounded w-16" style={{ background: 'var(--nx-hairline)' }} />
+        <div className="h-7 rounded w-16" style={{ background: 'var(--nx-hairline)' }} />
       </div>
     </div>
   );
@@ -59,16 +62,13 @@ export default function TemplateList() {
       <div className="p-6 space-y-5">
         {/* Filter bar */}
         <div className="flex items-center justify-between">
-          <span
-            className="text-[10px] font-medium tracking-widest uppercase"
-            style={{ fontFamily: "'Geist Mono', monospace", color: 'rgba(0,0,0,0.40)' }}
-          >
+          <span className="text-sm" style={{ color: 'var(--nx-ink-muted)' }}>
             {templates.length} template{templates.length !== 1 ? 's' : ''}
           </span>
 
           <div
-            className="flex items-center gap-1 rounded-full p-1"
-            style={{ background: '#f7f7f5', border: '1px solid #e6e6e6' }}
+            className="flex items-center gap-1 rounded-[var(--nx-radius-sm)] p-1"
+            style={{ background: 'var(--nx-surface)', border: '1px solid var(--nx-hairline)' }}
           >
             {([['grid', Grid], ['list', List]] as const).map(([mode, Icon]) => (
               <TooltipProvider key={mode} delayDuration={200}>
@@ -76,11 +76,11 @@ export default function TemplateList() {
                   <TooltipTrigger asChild>
                     <button
                       onClick={() => setViewMode(mode)}
-                      className="flex h-7 w-7 items-center justify-center rounded-full transition-all duration-150"
+                      className="flex h-7 w-7 items-center justify-center rounded-[var(--nx-radius-sm)] transition-colors duration-150"
                       style={viewMode === mode ? {
-                        background: '#000',
-                        color: '#fff',
-                      } : { color: 'rgba(0,0,0,0.40)' }}
+                        background: 'var(--nx-accent-tint)',
+                        color: 'var(--nx-accent)',
+                      } : { color: 'var(--nx-ink-muted)' }}
                     >
                       <Icon className="h-3.5 w-3.5" />
                     </button>
@@ -95,8 +95,8 @@ export default function TemplateList() {
         {/* Error */}
         {error && (
           <div
-            className="flex items-center gap-2 rounded-2xl px-4 py-3 text-sm text-red-700"
-            style={{ background: '#efd4d4', border: '1px solid rgba(239,68,68,0.20)' }}
+            className="flex items-center gap-2 rounded-[var(--nx-radius-md)] px-4 py-3 text-sm"
+            style={{ background: 'var(--nx-destructive-tint)', color: 'var(--nx-destructive)' }}
           >
             <AlertCircle className="h-4 w-4 shrink-0" />
             {error}
@@ -112,113 +112,97 @@ export default function TemplateList() {
 
         {/* Empty */}
         {!loading && !error && templates.length === 0 && (
-          <div
-            className="rounded-2xl p-16 flex flex-col items-center justify-center text-center"
-            style={{ background: '#f7f7f5', border: '2px dashed #e6e6e6' }}
-          >
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-black/6 mb-5">
-              <FileText className="h-7 w-7 text-black/40" />
+          <Card className="p-16 flex flex-col items-center justify-center text-center border-dashed">
+            <div
+              className="flex h-16 w-16 items-center justify-center rounded-full mb-5"
+              style={{ background: 'var(--nx-surface)' }}
+            >
+              <FileText className="h-7 w-7" style={{ color: 'var(--nx-ink-muted)' }} />
             </div>
-            <h3 className="text-base font-bold text-black">No templates yet</h3>
-            <p className="text-sm text-black/50 mt-1.5 mb-6">
+            <h3 className="text-base font-semibold" style={{ color: 'var(--nx-ink)' }}>No templates yet</h3>
+            <p className="text-sm mt-1.5 mb-6" style={{ color: 'var(--nx-ink-muted)' }}>
               {canEdit ? 'Create your first template to get started.' : 'No templates are available.'}
             </p>
             {canEdit && (
-              <button
-                onClick={() => navigate('/templates/new')}
-                className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-black hover:bg-black/80 active:scale-[0.97] transition-all"
-                style={{ borderRadius: 50 }}
-              >
+              <Button onClick={() => navigate('/templates/new')}>
                 <Plus className="h-4 w-4" />
                 Create Template
-              </button>
+              </Button>
             )}
-          </div>
+          </Card>
         )}
 
         {/* Grid view */}
         {!loading && !error && templates.length > 0 && viewMode === 'grid' && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {templates.map((t, i) => (
-              <div
-                key={t.id}
-                className="rounded-2xl overflow-hidden"
-                style={{ border: '1px solid #e6e6e6', background: '#fff' }}
-              >
-                <div
-                  className="p-5"
-                  style={{ background: BLOCK_COLORS[i % BLOCK_COLORS.length] }}
-                >
+            {templates.map((t) => (
+              <Card key={t.id} className="overflow-hidden">
+                <div className="p-5">
                   <div className="flex items-start gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black/10">
-                      <FileText className="h-4 w-4 text-black/60" />
+                    <div
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--nx-radius-sm)]"
+                      style={{ background: 'var(--nx-accent-tint)' }}
+                    >
+                      <FileText className="h-4 w-4" style={{ color: 'var(--nx-accent)' }} />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-bold text-sm text-black truncate" style={{ letterSpacing: '-0.01em' }}>{t.name}</p>
-                      <p
-                        className="text-xs mt-0.5"
-                        style={{ fontFamily: "'Geist Mono', monospace", color: 'rgba(0,0,0,0.45)' }}
-                      >
+                      <p className="font-semibold text-sm truncate" style={{ color: 'var(--nx-ink)' }}>{t.name}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--nx-ink-muted)' }}>
                         {new Date(t.created_at).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
                 </div>
-                <div className="px-5 py-3 flex gap-2 items-center" style={{ borderTop: '1px solid #e6e6e6' }}>
+                <div
+                  className="px-5 py-3 flex gap-2 items-center"
+                  style={{ borderTop: '1px solid var(--nx-hairline)' }}
+                >
                   {canFill && (
-                    <Link
-                      to={`/templates/${t.id}/fill`}
-                      className="flex-1 inline-flex items-center justify-center px-3 py-1.5 text-xs font-semibold text-white bg-black hover:bg-black/80 transition-all"
-                      style={{ borderRadius: 50 }}
-                    >
-                      Fill Form
+                    <Link to={`/templates/${t.id}/fill`} className="flex-1">
+                      <Button size="sm" className="w-full">Fill Form</Button>
                     </Link>
                   )}
                   {canEdit && (
-                    <Link
-                      to={`/templates/${t.id}/edit`}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-black hover:bg-black/6 transition-all"
-                      style={{ borderRadius: 50, border: '1px solid #e6e6e6' }}
-                    >
-                      <Edit2 className="h-3 w-3" />
-                      Edit
+                    <Link to={`/templates/${t.id}/edit`} className="flex-1">
+                      <Button size="sm" variant="secondary" className="w-full">
+                        <Edit2 className="h-3 w-3" />
+                        Edit
+                      </Button>
                     </Link>
                   )}
                   {canDelete && (
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <button
-                            className="flex h-7 w-7 items-center justify-center rounded-full text-black/30 hover:text-red-600 hover:bg-red-50 transition-all"
-                            style={{ border: '1px solid #e6e6e6' }}
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8 hover:text-[var(--nx-destructive)]"
                             onClick={() => handleDelete(t.id)}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          </Button>
                         </TooltipTrigger>
                         <TooltipContent>Delete template</TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
                   )}
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
         )}
 
         {/* List view */}
         {!loading && !error && templates.length > 0 && viewMode === 'list' && (
-          <div
-            className="rounded-2xl overflow-hidden"
-            style={{ border: '1px solid #e6e6e6' }}
-          >
+          <Card className="overflow-hidden p-0">
             <table className="w-full text-sm">
               <thead>
-                <tr style={{ background: '#f7f7f5', borderBottom: '1px solid #e6e6e6' }}>
-                  <th className="text-left px-5 py-3 text-[10px] font-medium tracking-widest uppercase" style={{ fontFamily: "'Geist Mono', monospace", color: 'rgba(0,0,0,0.40)' }}>Name</th>
-                  <th className="text-left px-5 py-3 text-[10px] font-medium tracking-widest uppercase" style={{ fontFamily: "'Geist Mono', monospace", color: 'rgba(0,0,0,0.40)' }}>Created</th>
-                  <th className="text-left px-5 py-3 text-[10px] font-medium tracking-widest uppercase" style={{ fontFamily: "'Geist Mono', monospace", color: 'rgba(0,0,0,0.40)' }}>Updated</th>
-                  <th className="px-5 py-3 text-[10px] font-medium tracking-widest uppercase text-right" style={{ fontFamily: "'Geist Mono', monospace", color: 'rgba(0,0,0,0.40)' }}>Actions</th>
+                <tr style={{ background: 'var(--nx-surface)', borderBottom: '1px solid var(--nx-hairline)' }}>
+                  <th className="text-left px-5 py-3 text-xs font-medium" style={{ color: 'var(--nx-ink-muted)' }}>Name</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium" style={{ color: 'var(--nx-ink-muted)' }}>Created</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium" style={{ color: 'var(--nx-ink-muted)' }}>Updated</th>
+                  <th className="px-5 py-3 text-xs font-medium text-right" style={{ color: 'var(--nx-ink-muted)' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -226,43 +210,38 @@ export default function TemplateList() {
                   <tr
                     key={t.id}
                     style={{
-                      borderBottom: i < templates.length - 1 ? '1px solid #f1f1f1' : 'none',
+                      borderBottom: i < templates.length - 1 ? '1px solid var(--nx-hairline)' : 'none',
                     }}
-                    className="hover:bg-[#f7f7f5] transition-colors"
+                    className="hover:bg-[var(--nx-surface)] transition-colors"
                   >
-                    <td className="px-5 py-3 font-semibold text-black">{t.name}</td>
-                    <td className="px-5 py-3 text-xs text-black/50" style={{ fontFamily: "'Geist Mono', monospace" }}>{new Date(t.created_at).toLocaleDateString()}</td>
-                    <td className="px-5 py-3 text-xs text-black/50" style={{ fontFamily: "'Geist Mono', monospace" }}>{t.updated_at ? new Date(t.updated_at).toLocaleDateString() : '—'}</td>
+                    <td className="px-5 py-3 font-medium" style={{ color: 'var(--nx-ink)' }}>{t.name}</td>
+                    <td className="px-5 py-3 text-xs" style={{ color: 'var(--nx-ink-muted)' }}>{new Date(t.created_at).toLocaleDateString()}</td>
+                    <td className="px-5 py-3 text-xs" style={{ color: 'var(--nx-ink-muted)' }}>{t.updated_at ? new Date(t.updated_at).toLocaleDateString() : '—'}</td>
                     <td className="px-5 py-3">
                       <div className="flex items-center justify-end gap-2">
                         {canFill && (
-                          <Link
-                            to={`/templates/${t.id}/fill`}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-black hover:bg-black/80 transition-all"
-                            style={{ borderRadius: 50 }}
-                          >
-                            Fill
+                          <Link to={`/templates/${t.id}/fill`}>
+                            <Button size="sm">Fill</Button>
                           </Link>
                         )}
                         {canEdit && (
-                          <Link
-                            to={`/templates/${t.id}/edit`}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-black hover:bg-black/6 transition-colors"
-                            style={{ borderRadius: 50, border: '1px solid #e6e6e6' }}
-                          >
-                            <Edit2 className="h-3 w-3" />
-                            Edit
+                          <Link to={`/templates/${t.id}/edit`}>
+                            <Button size="sm" variant="secondary">
+                              <Edit2 className="h-3 w-3" />
+                              Edit
+                            </Button>
                           </Link>
                         )}
                         {canDelete && (
-                          <button
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-red-500 hover:bg-red-50 transition-all"
-                            style={{ borderRadius: 50, border: '1px solid rgba(239,68,68,0.20)' }}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="hover:text-[var(--nx-destructive)]"
                             onClick={() => handleDelete(t.id)}
                           >
                             <Trash2 className="h-3 w-3" />
                             Delete
-                          </button>
+                          </Button>
                         )}
                       </div>
                     </td>
@@ -270,7 +249,7 @@ export default function TemplateList() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
         )}
       </div>
     </AppLayout>
