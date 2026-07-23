@@ -67,62 +67,9 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Route-change progress bar (top of screen) ── */
-@keyframes nx-progress {
-  0%   { width: 0%; opacity: 1; }
-  80%  { width: 90%; opacity: 1; }
-  100% { width: 100%; opacity: 0; }
-}
-.nx-route-bar {
-  animation: nx-progress 3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-
-/* ── Transition overlay fade ── */
-@keyframes nx-fade-out {
-  0%   { opacity: 1; }
-  70%  { opacity: 1; }
-  100% { opacity: 0; }
-}
-.nx-overlay-fade {
-  animation: nx-fade-out 3.4s ease-out forwards;
-}
-
-/* ── Loading animations ── */
-@keyframes ls-barLight {
-  0%   { left: -40%; width: 40%; }
-  50%  { left: 30%;  width: 55%; }
-  100% { left: 100%; width: 40%; }
-}
-.ls-bar-light { animation: ls-barLight 1.8s cubic-bezier(.4,0,.2,1) infinite; }
-
-@keyframes ls-dotsAnim {
-  0%, 20% { opacity: 0; }
-  50%     { opacity: 1; }
-  100%    { opacity: 0; }
-}
-.ls-dots { display: inline-block; animation: ls-dotsAnim 1.4s ease-in-out infinite; }
-
-@keyframes ls-ringSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-.ls-ring-d { transform-origin: 52px 52px; animation: ls-ringSpin 1.4s linear infinite; }
-
-.ls-dot-pulse {
-  width: 7px; height: 7px; border-radius: 999px;
-  background: #000;
-  animation: ls-dotPulse 1.4s ease-in-out infinite;
-}
-@keyframes ls-dotPulse {
-  0%, 100% { opacity: 0.25; transform: scale(0.85); }
-  50%      { opacity: 1;    transform: scale(1.1); }
-}
-
-.ls-mdot {
-  width: 6px; height: 6px; border-radius: 999px;
-  background: #000;
-  animation: ls-mdotJump 1.2s ease-in-out infinite;
-}
-@keyframes ls-mdotJump {
-  0%, 80%, 100% { opacity: 0.15; transform: translateY(0); }
-  40%           { opacity: 1; transform: translateY(-6px); }
+/* ── Route fallback spinner ── */
+@keyframes nx-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* ── Scrollbar ── */
