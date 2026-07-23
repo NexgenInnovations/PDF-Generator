@@ -3,20 +3,20 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../../lib/utils.js';
 
 const badgeVariants = cva(
-  'inline-flex items-center px-2.5 py-0.5 text-xs font-semibold transition-colors border',
+  'inline-flex items-center rounded-[var(--nx-radius-sm)] px-2 py-0.5 text-xs font-medium transition-colors border',
   {
     variants: {
       variant: {
         default:
-          'rounded-full border-black/20 bg-black text-white',
+          'border-transparent bg-[var(--nx-accent-tint)] text-[var(--nx-accent)]',
         secondary:
-          'rounded-full border-[#e6e6e6] bg-[#f7f7f5] text-black/50',
+          'border-[var(--nx-hairline)] bg-[var(--nx-surface)] text-[var(--nx-ink-secondary)]',
         destructive:
-          'rounded-full border-red-200 bg-red-50 text-red-600',
+          'border-transparent bg-[var(--nx-destructive-tint)] text-[var(--nx-destructive)]',
         outline:
-          'rounded-full border-[#e6e6e6] text-black/60 bg-transparent',
+          'border-[var(--nx-hairline)] text-[var(--nx-ink-secondary)] bg-transparent',
         success:
-          'rounded-full border-[#c8e6cd] bg-[#c8e6cd] text-[#1ea64a]',
+          'border-transparent bg-[var(--nx-success-tint)] text-[var(--nx-success)]',
       },
     },
     defaultVariants: { variant: 'default' },
