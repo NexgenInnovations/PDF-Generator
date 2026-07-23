@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Form, Viewer } from '@pdfme/ui';
 import { generate } from '@pdfme/generator';
 import { getInputFromTemplate, type Template } from '@pdfme/common';
 import { ArrowLeft, Download, FileCheck, Loader2, AlertCircle } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { getFonts, getPlugins } from '../lib/pdfme.js';
+import type { PublishedVersionRef } from '../lib/api.js';
 
 type PageState = 'filling' | 'preview';
 
 export default function FormFill() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const uiRef = useRef<Form | Viewer | null>(null);
@@ -20,12 +22,25 @@ export default function FormFill() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const versionParam = searchParams.get('version');
+  const tagParam = searchParams.get('tag');
+  const versionRef: PublishedVersionRef | undefined = versionParam
+    ? { version: Number(versionParam) }
+    : tagParam
+      ? { tag: tagParam }
+      : undefined;
+
   useEffect(() => {
     if (!id) return;
-    api.getTemplate(id)
-      .then((record) => setTemplateRecord({ name: record.name, schema: record.schema as Template }))
+    api.getTemplate(id, versionRef)
+      .then((record) => {
+        const schema = record.latestPublished?.schema;
+        if (!schema) { setError('No published version available for this template.'); return; }
+        setTemplateRecord({ name: record.name, schema: schema as Template });
+      })
       .catch((e: Error) => setError(e.message));
-  }, [id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, versionParam, tagParam]);
 
   useEffect(() => {
     if (!templateRecord || !containerRef.current) return;
@@ -64,7 +79,7 @@ export default function FormFill() {
         uiRef.current = new Viewer({ domContainer: containerRef.current, template, inputs, options: { font: getFonts(), lang: 'en' }, plugins: getPlugins() });
       }
       setPageState('preview');
-      await api.createFilledPdf(id, inputs);
+      await api.createFilledPdf(id, inputs, versionRef);
     } catch (e) {
       setError((e as Error).message);
     } finally {
