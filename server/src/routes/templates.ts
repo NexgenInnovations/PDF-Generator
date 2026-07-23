@@ -280,12 +280,22 @@ templatesRouter.post('/:id/publish', async (req: Request, res: Response) => {
 
     const target = mode === 'new' ? { mode: 'new' as const } : { mode: 'replace' as const, version: version! };
     const published = await publishVersion(req.params.id, schema, tag, target);
-    await saveDraft(req.params.id, schema);
+
+    // Re-sync the draft to mirror what was just published. Best-effort: the
+    // publish itself already committed, so a failure here must not be
+    // reported as a publish failure — it would falsely tell the client the
+    // publish didn't happen when it did, and could lead to a confusing
+    // duplicate-tag 409 on a retry.
+    try {
+      await saveDraft(req.params.id, schema);
+    } catch (syncError) {
+      console.error('Failed to re-sync draft after publish:', syncError);
+    }
 
     res.json({ schema: published.schema, version: published.version, tag: published.tag });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unexpected server error';
-    if (message.includes('UNIQUE') || message.includes('duplicate')) {
+    const dbError = error as { number?: number };
+    if (dbError.number === 2601 || dbError.number === 2627) {
       res.status(409).json({ error: `Tag "${(req.body as { tag?: string }).tag}" is already used for this template` });
       return;
     }
