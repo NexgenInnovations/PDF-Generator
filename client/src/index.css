@@ -2,7 +2,7 @@
 
 /* ══════════════════════════════════════════
    NEXGEN PDF MANAGER — Design System
-   Stripe-style: white surfaces, indigo accent,
+   Stripe-style: white surfaces, emerald accent,
    standard border radii
    ══════════════════════════════════════════ */
 
@@ -10,7 +10,7 @@
   /* Surfaces */
   --nx-canvas:        #ffffff;
   --nx-surface:       #f7fafc;
-  --nx-surface-tint:  #f5f3ff;  /* active/selected nav background */
+  --nx-surface-tint:  #ecfdf5;  /* active/selected nav background */
   --nx-hairline:      #e3e8ef;
 
   /* Ink */
@@ -19,8 +19,8 @@
   --nx-ink-muted:      #8792a2;  /* labels, captions, placeholders */
 
   /* Accent */
-  --nx-accent:         #635bff;  /* primary actions, active states */
-  --nx-accent-tint:    #f5f3ff;  /* light accent background (badges, active nav) */
+  --nx-accent:         #059669;  /* primary actions, active states */
+  --nx-accent-tint:    #ecfdf5;  /* light accent background (badges, active nav) */
 
   /* Semantic */
   --nx-success:        #0e6245;
@@ -39,19 +39,19 @@
   --card-foreground:   210 55% 10%;
   --popover:           0 0% 100%;
   --popover-foreground:210 55% 10%;
-  --primary:           245 100% 68%;
+  --primary:           161 94% 30%;
   --primary-foreground:0 0% 100%;
   --secondary:         220 20% 97%;
   --secondary-foreground:210 25% 32%;
   --muted:             220 20% 97%;
   --muted-foreground:  216 12% 55%;
-  --accent:            256 100% 97%;
-  --accent-foreground: 245 100% 68%;
+  --accent:            152 81% 96%;
+  --accent-foreground: 161 94% 30%;
   --destructive:       0 72% 51%;
   --destructive-foreground:0 0% 100%;
   --border:            216 20% 91%;
   --input:             0 0% 100%;
-  --ring:              245 100% 68%;
+  --ring:              161 94% 30%;
   --radius:            0.5rem;
 }
 
