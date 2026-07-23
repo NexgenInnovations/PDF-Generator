@@ -4,27 +4,27 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../../lib/utils.js';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-semibold ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00CFFF] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--nx-radius-sm)] text-sm font-semibold ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--nx-accent)] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
   {
     variants: {
       variant: {
         default:
-          'bg-gradient-to-r from-[#0057FF] to-[#00CFFF] text-white shadow-[0_0_18px_rgba(0,207,255,0.45),0_0_6px_rgba(0,87,255,0.30)] hover:shadow-[0_0_24px_rgba(0,207,255,0.65)] hover:brightness-110 active:scale-[0.97]',
+          'bg-[var(--nx-accent)] text-white hover:brightness-110 active:scale-[0.98]',
         destructive:
-          'bg-red-600/90 text-white hover:bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.3)]',
+          'bg-[var(--nx-destructive)] text-white hover:brightness-110',
         outline:
-          'border border-[rgba(0,207,255,0.30)] bg-transparent text-[#A0B4CC] hover:border-[#00CFFF] hover:text-white hover:bg-[rgba(0,207,255,0.06)]',
+          'border border-[var(--nx-hairline)] bg-transparent text-[var(--nx-ink-secondary)] hover:bg-[var(--nx-surface)]',
         secondary:
-          'bg-[rgba(255,255,255,0.06)] text-[#A0B4CC] hover:bg-[rgba(0,207,255,0.08)] hover:text-white border border-[rgba(0,207,255,0.12)]',
+          'bg-white text-[var(--nx-ink)] border border-[var(--nx-hairline)] hover:bg-[var(--nx-surface)]',
         ghost:
-          'text-[#A0B4CC] hover:bg-[rgba(0,207,255,0.06)] hover:text-white',
+          'text-[var(--nx-ink-secondary)] hover:bg-[var(--nx-surface)] hover:text-[var(--nx-ink)]',
         link:
-          'text-[#00CFFF] underline-offset-4 hover:underline hover:text-white p-0 h-auto',
+          'text-[var(--nx-accent)] underline-offset-4 hover:underline p-0 h-auto',
       },
       size: {
         default: 'h-9 px-4 py-2',
-        sm: 'h-8 rounded-md px-3 text-xs',
-        lg: 'h-11 rounded-md px-6 text-base',
+        sm: 'h-8 rounded-[var(--nx-radius-sm)] px-3 text-xs',
+        lg: 'h-11 rounded-[var(--nx-radius-sm)] px-6 text-base',
         icon: 'h-9 w-9',
       },
     },
