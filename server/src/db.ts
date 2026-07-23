@@ -70,6 +70,16 @@ async function ensureTables(): Promise<void> {
     ALTER TABLE template_versions ADD tag NVARCHAR(255) NULL
   `);
 
+  // Backfill a synthetic tag for pre-existing published rows saved before
+  // tags existed (version numbers are already unique per template, so this
+  // is guaranteed collision-free and lets the uniqueness index below be
+  // created without manual data cleanup).
+  await p.request().query(`
+    UPDATE template_versions
+    SET tag = 'legacy-v' + CAST(version AS NVARCHAR(20))
+    WHERE status = 'published' AND tag IS NULL
+  `);
+
   await p.request().query(`
     IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'uq_template_versions_tag' AND object_id = OBJECT_ID('template_versions'))
     CREATE UNIQUE INDEX uq_template_versions_tag
