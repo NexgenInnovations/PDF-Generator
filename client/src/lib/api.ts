@@ -1,6 +1,7 @@
 import type {
   TemplateRecord,
   TemplateSummary,
+  PublishedVersionSummary,
 } from "../types.js";
 import type { Template } from "@pdfme/common";
 
@@ -15,7 +16,15 @@ export interface AiFormChatResponse {
   template?: Template;
 }
 
+export type PublishedVersionRef = { version: number } | { tag: string };
+
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "/api").replace(/\/$/, "");
+
+function versionRefToQuery(ref?: PublishedVersionRef): string {
+  if (!ref) return "";
+  if ("version" in ref) return `?version=${encodeURIComponent(ref.version)}`;
+  return `?tag=${encodeURIComponent(ref.tag)}`;
+}
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(API_BASE + url, options);
@@ -41,7 +50,8 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 export const api = {
   listTemplates: () => request<TemplateSummary[]>("/templates"),
 
-  getTemplate: (id: string) => request<TemplateRecord>(`/templates/${id}`),
+  getTemplate: (id: string, versionRef?: PublishedVersionRef) =>
+    request<TemplateRecord>(`/templates/${id}${versionRefToQuery(versionRef)}`),
 
   createTemplate: (name: string, schema: Template) =>
     request<TemplateRecord>("/templates", {
@@ -57,14 +67,38 @@ export const api = {
       body: JSON.stringify({ name, schema }),
     }),
 
+  publishTemplate: (
+    id: string,
+    schema: Template,
+    tag: string,
+    target: { mode: "new" } | { mode: "replace"; version: number }
+  ) =>
+    request<{ schema: Template; version: number; tag: string }>(`/templates/${id}/publish`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ schema, tag, ...target }),
+    }),
+
+  listPublishedVersions: (id: string) =>
+    request<PublishedVersionSummary[]>(`/templates/${id}/versions`),
+
   deleteTemplate: (id: string) =>
     request<void>(`/templates/${id}`, { method: "DELETE" }),
 
-  createFilledPdf: async (template_id: string, inputs: Record<string, string>[]) => {
+  createFilledPdf: async (
+    template_id: string,
+    inputs: Record<string, string>[],
+    versionRef?: PublishedVersionRef
+  ) => {
     const res = await fetch(API_BASE + "/generate-pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ template_id, inputs }),
+      body: JSON.stringify({
+        template_id,
+        inputs,
+        ...(versionRef && "version" in versionRef ? { version: versionRef.version } : {}),
+        ...(versionRef && "tag" in versionRef ? { tag: versionRef.tag } : {}),
+      }),
     });
     if (!res.ok) {
       const text = await res.text();

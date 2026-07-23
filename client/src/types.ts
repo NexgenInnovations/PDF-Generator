@@ -3,9 +3,16 @@ export type Role = 'Admin' | 'Designer' | 'FormFiller';
 export interface TemplateRecord {
   id: string;
   name: string;
-  schema: object;
   created_at: string;
   updated_at: string | null;
+  draft: { schema: object; version: number } | null;
+  latestPublished: { schema: object; version: number; tag: string | null } | null;
+}
+
+export interface PublishedVersionSummary {
+  version: number;
+  tag: string | null;
+  created_at: string;
 }
 
 export interface TemplateSummary {
