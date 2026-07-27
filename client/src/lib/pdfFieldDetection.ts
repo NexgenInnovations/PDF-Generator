@@ -44,9 +44,8 @@ function mapFieldWidget(
   widget: PDFWidgetAnnotation,
   pageHeightPt: number,
   usedNames: Set<string>,
+  fieldName: string,
 ): Schema | null {
-  const fieldName = field.getName();
-
   try {
     const rect = widget.getRectangle();
     const { position, width, height } = rectToPosition(rect, pageHeightPt);
@@ -116,11 +115,18 @@ export async function detectFields(pdfBytes: ArrayBuffer): Promise<Schema[][]> {
   const fields = doc.getForm().getFields();
 
   for (const field of fields) {
+    let fieldName: string;
+    try {
+      fieldName = field.getName();
+    } catch {
+      fieldName = '(unnamed field)';
+    }
+
     let widgets: PDFWidgetAnnotation[];
     try {
       widgets = field.acroField.getWidgets();
     } catch (e) {
-      console.warn(`[pdfFieldDetection] Skipping field "${field.getName()}": ${(e as Error).message}`);
+      console.warn(`[pdfFieldDetection] Skipping field "${fieldName}": ${(e as Error).message}`);
       continue;
     }
 
@@ -128,17 +134,17 @@ export async function detectFields(pdfBytes: ArrayBuffer): Promise<Schema[][]> {
       try {
         const page = resolveWidgetPage(doc, pages, widget);
         if (!page) {
-          console.warn(`[pdfFieldDetection] Skipping a widget of field "${field.getName()}": could not resolve its page`);
+          console.warn(`[pdfFieldDetection] Skipping a widget of field "${fieldName}": could not resolve its page`);
           continue;
         }
         const pageIndex = pages.indexOf(page);
         const pageHeightPt = page.getHeight();
-        const schema = mapFieldWidget(field, widget, pageHeightPt, usedNamesPerPage[pageIndex]);
+        const schema = mapFieldWidget(field, widget, pageHeightPt, usedNamesPerPage[pageIndex], fieldName);
         if (schema) {
           schemas[pageIndex].push(schema);
         }
       } catch (e) {
-        console.warn(`[pdfFieldDetection] Skipping a widget of field "${field.getName()}": ${(e as Error).message}`);
+        console.warn(`[pdfFieldDetection] Skipping a widget of field "${fieldName}": ${(e as Error).message}`);
       }
     }
   }
