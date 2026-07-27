@@ -14,6 +14,7 @@ import { Input } from '../components/ui/input.js';
 import AskAiPanel from '../components/AskAiPanel.js';
 import HeaderFooterEditor from '../components/HeaderFooterEditor.js';
 import ApiPayloadModal from '../components/ApiPayloadModal.js';
+import { detectFields } from '../lib/pdfFieldDetection.js';
 
 const BLANK_TEMPLATE: Template = {
   basePdf: { width: 210, height: 297, padding: [10, 10, 10, 10] },
@@ -496,14 +497,38 @@ export default function TemplateDesigner() {
     const file = e.target.files?.[0];
     if (!file || !designerRef.current) return;
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       const dataUrl = reader.result as string;
       const t = designerRef.current!.getTemplate();
+
+      let detectedSchemas: import('@pdfme/common').Schema[][] | null = null;
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const schemas = await detectFields(arrayBuffer);
+        const hasAnyFields = schemas.some(page => page.length > 0);
+        if (hasAnyFields) detectedSchemas = schemas;
+      } catch (err) {
+        console.warn('PDF field detection failed, falling back to background-only update:', err);
+      }
+
+      if (detectedSchemas) {
+        const candidate = { ...t, basePdf: dataUrl, schemas: detectedSchemas };
+        try {
+          checkTemplate(candidate);
+          designerRef.current!.updateTemplate(candidate);
+          setTemplateVersion(v => v + 1);
+          e.target.value = '';
+          return;
+        } catch (err) {
+          setError(`Detected fields could not be applied: ${(err as Error).message}`);
+        }
+      }
+
       designerRef.current!.updateTemplate({ ...t, basePdf: dataUrl });
       setTemplateVersion(v => v + 1);
+      e.target.value = '';
     };
     reader.readAsDataURL(file);
-    e.target.value = '';
   };
 
   const barStyle: React.CSSProperties = {
