@@ -45,11 +45,12 @@ function mapFieldWidget(
   pageHeightPt: number,
   usedNames: Set<string>,
 ): Schema | null {
-  const rect = widget.getRectangle();
-  const { position, width, height } = rectToPosition(rect, pageHeightPt);
   const fieldName = field.getName();
 
   try {
+    const rect = widget.getRectangle();
+    const { position, width, height } = rectToPosition(rect, pageHeightPt);
+
     if (field instanceof PDFTextField) {
       return {
         name: makeUniqueName(fieldName, usedNames),
