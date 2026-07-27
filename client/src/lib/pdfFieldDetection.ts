@@ -125,16 +125,20 @@ export async function detectFields(pdfBytes: ArrayBuffer): Promise<Schema[][]> {
     }
 
     for (const widget of widgets) {
-      const page = resolveWidgetPage(doc, pages, widget);
-      if (!page) {
-        console.warn(`[pdfFieldDetection] Skipping a widget of field "${field.getName()}": could not resolve its page`);
-        continue;
-      }
-      const pageIndex = pages.indexOf(page);
-      const pageHeightPt = page.getHeight();
-      const schema = mapFieldWidget(field, widget, pageHeightPt, usedNamesPerPage[pageIndex]);
-      if (schema) {
-        schemas[pageIndex].push(schema);
+      try {
+        const page = resolveWidgetPage(doc, pages, widget);
+        if (!page) {
+          console.warn(`[pdfFieldDetection] Skipping a widget of field "${field.getName()}": could not resolve its page`);
+          continue;
+        }
+        const pageIndex = pages.indexOf(page);
+        const pageHeightPt = page.getHeight();
+        const schema = mapFieldWidget(field, widget, pageHeightPt, usedNamesPerPage[pageIndex]);
+        if (schema) {
+          schemas[pageIndex].push(schema);
+        }
+      } catch (e) {
+        console.warn(`[pdfFieldDetection] Skipping a widget of field "${field.getName()}": ${(e as Error).message}`);
       }
     }
   }
