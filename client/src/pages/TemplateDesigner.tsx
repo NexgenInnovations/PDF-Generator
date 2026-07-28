@@ -15,6 +15,7 @@ import AskAiPanel from '../components/AskAiPanel.js';
 import HeaderFooterEditor from '../components/HeaderFooterEditor.js';
 import ApiPayloadModal from '../components/ApiPayloadModal.js';
 import { detectFields } from '../lib/pdfFieldDetection.js';
+import { detectFieldsWithAiVision } from '../lib/aiPdfVisionDetection.js';
 
 const BLANK_TEMPLATE: Template = {
   basePdf: { width: 210, height: 297, padding: [10, 10, 10, 10] },
@@ -252,6 +253,7 @@ export default function TemplateDesigner() {
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [isDetectingAi, setIsDetectingAi] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jsonOpen, setJsonOpen] = useState(false);
   const [jsonText, setJsonText] = useState('');
@@ -502,8 +504,9 @@ export default function TemplateDesigner() {
       const t = designerRef.current!.getTemplate();
 
       let detectedSchemas: import('@pdfme/common').Schema[][] | null = null;
+      let arrayBuffer: ArrayBuffer | null = null;
       try {
-        const arrayBuffer = await file.arrayBuffer();
+        arrayBuffer = await file.arrayBuffer();
         const schemas = await detectFields(arrayBuffer);
         const hasAnyFields = schemas.some(page => page.length > 0);
         if (hasAnyFields) detectedSchemas = schemas;
@@ -521,6 +524,26 @@ export default function TemplateDesigner() {
           return;
         } catch (err) {
           setError(`Detected fields could not be applied: ${(err as Error).message}`);
+        }
+      } else if (arrayBuffer) {
+        setIsDetectingAi(true);
+        try {
+          const aiTemplate = await detectFieldsWithAiVision(arrayBuffer);
+          if (aiTemplate) {
+            try {
+              checkTemplate(aiTemplate);
+              designerRef.current!.updateTemplate(aiTemplate);
+              setTemplateVersion(v => v + 1);
+              e.target.value = '';
+              return;
+            } catch (err) {
+              setError(`AI-generated template could not be applied: ${(err as Error).message}`);
+            }
+          } else {
+            setError("Couldn't detect fields from this PDF automatically — the PDF has been set as the background.");
+          }
+        } finally {
+          setIsDetectingAi(false);
         }
       }
 
@@ -631,7 +654,12 @@ export default function TemplateDesigner() {
         <Sep />
 
         <Group label="Base PDF">
-          <ToolbarBtn icon={<FileUp size={13} />} label="Change PDF" onClick={handleChangePdf} />
+          <ToolbarBtn
+            icon={<FileUp size={13} />}
+            label={isDetectingAi ? 'Detecting…' : 'Change PDF'}
+            onClick={handleChangePdf}
+            disabled={isDetectingAi}
+          />
           <input ref={basePdfInputRef} type="file" accept="application/pdf" style={{ display: 'none' }} onChange={handleBasePdfFile} />
         </Group>
 
