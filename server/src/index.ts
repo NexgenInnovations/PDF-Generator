@@ -14,12 +14,14 @@ const app = express();
 app.use(cors());
 
 // This route needs a larger body limit (base64 page images) than the rest
-// of the app. It must be registered, with its own express.json(), BEFORE
-// the app-wide express.json() below — Express does not allow a later,
-// larger-limit body parser to override an earlier, stricter one on the
-// same request, since the earlier one already consumes (or rejects) the
-// request stream. Keep this route registered above the global parser.
-app.use('/ai-form', express.json({ limit: '25mb' }), aiPdfVisionRouter);
+// of the app. Its parser is scoped to this exact path (not the shared
+// '/ai-form' prefix, which would also widen the sibling /ai-form/chat
+// route's limit) and registered BEFORE the app-wide express.json() below —
+// Express does not allow a later, larger-limit body parser to override an
+// earlier, stricter one on the same request, since the earlier one already
+// consumes (or rejects) the request stream. Keep this above the global parser.
+app.use('/ai-form/detect-from-pdf', express.json({ limit: '25mb' }));
+app.use('/ai-form', aiPdfVisionRouter);
 
 app.use(express.json({ limit: '10mb' }));
 

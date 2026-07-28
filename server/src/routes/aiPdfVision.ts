@@ -3,6 +3,8 @@ import { runAiPdfVisionDetection } from '../services/aiPdfVisionService.js';
 
 export const aiPdfVisionRouter = Router();
 
+const MAX_IMAGES = 10;
+
 /**
  * @openapi
  * /ai-form/detect-from-pdf:
@@ -19,9 +21,10 @@ export const aiPdfVisionRouter = Router();
  *             properties:
  *               images:
  *                 type: array
+ *                 maxItems: 10
  *                 items:
  *                   type: string
- *                   description: A data URL (data:image/jpeg;base64,...) for one page, in page order
+ *                   description: A data URL (data:image/jpeg;base64,...) for one page, in page order (max 10 pages)
  *     responses:
  *       200:
  *         description: The generated template
@@ -50,6 +53,11 @@ aiPdfVisionRouter.post('/detect-from-pdf', async (req: Request, res: Response) =
 
   if (!Array.isArray(images) || images.length === 0 || !images.every(i => typeof i === 'string')) {
     res.status(400).json({ error: 'images is required and must be a non-empty array of strings' });
+    return;
+  }
+
+  if (images.length > MAX_IMAGES) {
+    res.status(400).json({ error: `images must contain at most ${MAX_IMAGES} pages` });
     return;
   }
 

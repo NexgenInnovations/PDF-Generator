@@ -11,9 +11,15 @@ function arrayBufferToDataUrl(buffer: ArrayBuffer, mimeType: string): string {
   return `data:${mimeType};base64,${btoa(binary)}`;
 }
 
+const MAX_PAGES = 10;
+
 export async function detectFieldsWithAiVision(pdfBytes: ArrayBuffer): Promise<Template | null> {
   try {
-    const pageBuffers = await pdf2img(pdfBytes, { imageType: 'jpeg', scale: 1.5 });
+    const pageBuffers = await pdf2img(pdfBytes, {
+      imageType: 'jpeg',
+      scale: 1.5,
+      range: { start: 0, end: MAX_PAGES - 1 },
+    });
     if (pageBuffers.length === 0) return null;
 
     const images = pageBuffers.map(buf => arrayBufferToDataUrl(buf, 'image/jpeg'));
