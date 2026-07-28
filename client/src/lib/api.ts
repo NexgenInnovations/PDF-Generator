@@ -16,6 +16,10 @@ export interface AiFormChatResponse {
   template?: Template;
 }
 
+export interface AiPdfVisionResponse {
+  template: Template;
+}
+
 export type PublishedVersionRef = { version: number } | { tag: string };
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "/api").replace(/\/$/, "");
@@ -111,5 +115,12 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messages }),
+    }),
+
+  aiDetectFieldsFromPdf: (images: string[]) =>
+    request<AiPdfVisionResponse>("/ai-form/detect-from-pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ images }),
     }),
 };
