@@ -2,6 +2,7 @@ import type {
   TemplateRecord,
   TemplateSummary,
   PublishedVersionSummary,
+  AssetRecord,
 } from "../types.js";
 import type { Template } from "@pdfme/common";
 
@@ -123,4 +124,22 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ images }),
     }),
+
+  listAssets: () => request<AssetRecord[]>("/assets"),
+
+  uploadAsset: async (file: File, name: string): Promise<AssetRecord> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("name", name);
+    const res = await fetch(API_BASE + "/assets", { method: "POST", body: formData });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`${res.status} ${text}`);
+    }
+    return res.json() as Promise<AssetRecord>;
+  },
+
+  deleteAsset: (id: string) => request<void>(`/assets/${id}`, { method: "DELETE" }),
+
+  assetFileUrl: (id: string) => `${API_BASE}/assets/${id}/file`,
 };

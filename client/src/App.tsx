@@ -6,6 +6,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard.js'));
 const TemplateList = lazy(() => import('./pages/TemplateList.js'));
 const TemplateDesigner = lazy(() => import('./pages/TemplateDesigner.js'));
 const FormFill = lazy(() => import('./pages/FormFill.js'));
+const Assets = lazy(() => import('./pages/Assets.js'));
 const NotFound = lazy(() => import('./pages/NotFound.js'));
 
 function RouteFallback() {
@@ -48,6 +49,14 @@ export default function App() {
           }
         />
         <Route path="/templates/:id/fill" element={<FormFill />} />
+        <Route
+          path="/assets"
+          element={
+            <RoleGuard allowed={['Admin', 'Designer']}>
+              <Assets />
+            </RoleGuard>
+          }
+        />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>

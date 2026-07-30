@@ -5,6 +5,7 @@ import {
   PlusCircle,
   Settings,
   LogOut,
+  Image,
 } from 'lucide-react';
 import { useRole } from '../../context/RoleContext.js';
 import { Avatar, AvatarFallback } from '../ui/avatar.js';
@@ -86,6 +87,9 @@ export function Sidebar() {
         <NavItem to="/templates" icon={<FileText className="h-4 w-4" />} label="Templates" />
         {(role === 'Admin' || role === 'Designer') && (
           <NavItem to="/templates/new" icon={<PlusCircle className="h-4 w-4" />} label="New Template" />
+        )}
+        {(role === 'Admin' || role === 'Designer') && (
+          <NavItem to="/assets" icon={<Image className="h-4 w-4" />} label="Assets" />
         )}
         {role === 'Admin' && (
           <NavItem to="/settings" icon={<Settings className="h-4 w-4" />} label="Settings" />

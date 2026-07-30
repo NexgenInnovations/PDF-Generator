@@ -29,3 +29,11 @@ export interface FilledPdfRecord {
   file_path: string;
   created_at: string;
 }
+
+export interface AssetRecord {
+  id: string;
+  name: string;
+  mime_type: string;
+  file_size_bytes: number;
+  created_at: string;
+}
