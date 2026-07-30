@@ -7,6 +7,7 @@ import {
   AlertCircle, ArrowLeft, Save, Loader2,
   FileJson, FileDown, RotateCcw, Copy, FileUp, Layout, Sparkles, Printer,
   RectangleVertical, RectangleHorizontal, PanelTop, Code, UploadCloud,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { getFonts, getPlugins } from '../lib/pdfme.js';
@@ -14,6 +15,7 @@ import { Input } from '../components/ui/input.js';
 import AskAiPanel from '../components/AskAiPanel.js';
 import HeaderFooterEditor from '../components/HeaderFooterEditor.js';
 import ApiPayloadModal from '../components/ApiPayloadModal.js';
+import AssetPicker from '../components/AssetPicker.js';
 import { detectFields } from '../lib/pdfFieldDetection.js';
 import { detectFieldsWithAiVision } from '../lib/aiPdfVisionDetection.js';
 
@@ -260,6 +262,7 @@ export default function TemplateDesigner() {
   const [aiOpen, setAiOpen] = useState(false);
   const [headerFooterOpen, setHeaderFooterOpen] = useState(false);
   const [apiPayloadOpen, setApiPayloadOpen] = useState(false);
+  const [assetPickerOpen, setAssetPickerOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [publishedVersions, setPublishedVersions] = useState<{ version: number; tag: string | null; created_at: string }[]>([]);
   const [publishing, setPublishing] = useState(false);
@@ -392,6 +395,30 @@ export default function TemplateDesigner() {
     }
     designerRef.current.updateTemplate(template);
     setAiOpen(false);
+  };
+
+  const handleAssetPicked = (dataUrl: string) => {
+    if (!designerRef.current) return;
+    const t = designerRef.current.getTemplate();
+    const pageIndex = designerRef.current.getPageCursor();
+    const schemas = t.schemas.map((page, i) =>
+      i === pageIndex
+        ? [
+            ...page,
+            {
+              name: `image_${Date.now()}`,
+              type: 'image',
+              content: dataUrl,
+              position: { x: 20, y: 20 },
+              width: 40,
+              height: 40,
+            },
+          ]
+        : page
+    );
+    designerRef.current.updateTemplate({ ...t, schemas });
+    setTemplateVersion(v => v + 1);
+    setAssetPickerOpen(false);
   };
 
   const handleHeaderFooterSave = (staticSchema: import('@pdfme/common').Schema[]) => {
@@ -675,6 +702,7 @@ export default function TemplateDesigner() {
           />
           <ToolbarBtn icon={<FileJson size={13} />} label="JSON" onClick={handleOpenJson} />
           <ToolbarBtn icon={<Sparkles size={13} />} label="Ask AI" onClick={() => setAiOpen(true)} />
+          <ToolbarBtn icon={<ImageIcon size={13} />} label="Pick from Assets" onClick={() => setAssetPickerOpen(true)} />
         </Group>
 
         <Sep />
@@ -777,6 +805,14 @@ export default function TemplateDesigner() {
           templateId={id ?? null}
           template={designerRef.current?.getTemplate() ?? BLANK_TEMPLATE}
           onClose={() => setApiPayloadOpen(false)}
+        />
+      )}
+
+      {/* Asset picker modal */}
+      {assetPickerOpen && (
+        <AssetPicker
+          onSelect={handleAssetPicked}
+          onClose={() => setAssetPickerOpen(false)}
         />
       )}
 
