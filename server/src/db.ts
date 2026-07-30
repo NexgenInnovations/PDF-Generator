@@ -164,6 +164,40 @@ async function ensureTables(): Promise<void> {
     )
   `);
 
+  await p.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('letterheads') AND name = 'type')
+    ALTER TABLE letterheads ADD type NVARCHAR(10) NOT NULL DEFAULT 'fields'
+  `);
+
+  await p.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('letterheads') AND name = 'base_pdf')
+    ALTER TABLE letterheads ADD base_pdf NVARCHAR(MAX) NULL
+  `);
+
+  await p.request().query(`
+    IF EXISTS (
+      SELECT 1 FROM sys.columns
+      WHERE object_id = OBJECT_ID('letterheads') AND name = 'static_schema' AND is_nullable = 0
+    )
+    ALTER TABLE letterheads ALTER COLUMN static_schema NVARCHAR(MAX) NULL
+  `);
+
+  await p.request().query(`
+    IF EXISTS (
+      SELECT 1 FROM sys.columns
+      WHERE object_id = OBJECT_ID('letterheads') AND name = 'page_width' AND is_nullable = 0
+    )
+    ALTER TABLE letterheads ALTER COLUMN page_width FLOAT NULL
+  `);
+
+  await p.request().query(`
+    IF EXISTS (
+      SELECT 1 FROM sys.columns
+      WHERE object_id = OBJECT_ID('letterheads') AND name = 'page_height' AND is_nullable = 0
+    )
+    ALTER TABLE letterheads ALTER COLUMN page_height FLOAT NULL
+  `);
+
   console.log('Tables ready');
 }
 
@@ -221,9 +255,11 @@ export interface CompanyAssetRow {
 export interface LetterheadRow {
   id: string;
   name: string;
-  static_schema: unknown;
-  page_width: number;
-  page_height: number;
+  type: 'fields' | 'pdf';
+  static_schema: unknown | null;
+  page_width: number | null;
+  page_height: number | null;
+  base_pdf: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -231,8 +267,9 @@ export interface LetterheadRow {
 export interface LetterheadSummaryRow {
   id: string;
   name: string;
-  page_width: number;
-  page_height: number;
+  type: 'fields' | 'pdf';
+  page_width: number | null;
+  page_height: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -661,7 +698,7 @@ export async function deleteAsset(id: string): Promise<CompanyAssetRow | null> {
 
 export async function listLetterheads(): Promise<LetterheadSummaryRow[]> {
   const result = await getPool().request().query(
-    'SELECT id, name, page_width, page_height, created_at, updated_at FROM letterheads ORDER BY updated_at DESC'
+    'SELECT id, name, type, page_width, page_height, created_at, updated_at FROM letterheads ORDER BY updated_at DESC'
   );
   return result.recordset;
 }
@@ -669,7 +706,7 @@ export async function listLetterheads(): Promise<LetterheadSummaryRow[]> {
 function parseLetterheadRow(row: Record<string, unknown>): LetterheadRow {
   return {
     ...row,
-    static_schema: JSON.parse(row.static_schema as string),
+    static_schema: row.static_schema ? JSON.parse(row.static_schema as string) : null,
   } as LetterheadRow;
 }
 
@@ -677,57 +714,63 @@ export async function getLetterhead(id: string): Promise<LetterheadRow | null> {
   const result = await getPool()
     .request()
     .input('id', sql.UniqueIdentifier, id)
-    .query('SELECT id, name, static_schema, page_width, page_height, created_at, updated_at FROM letterheads WHERE id = @id');
+    .query('SELECT id, name, type, static_schema, page_width, page_height, base_pdf, created_at, updated_at FROM letterheads WHERE id = @id');
   const row = result.recordset[0];
   return row ? parseLetterheadRow(row) : null;
 }
 
 export async function createLetterhead(input: {
   name: string;
-  staticSchema: unknown;
-  pageWidth: number;
-  pageHeight: number;
+  type: 'fields' | 'pdf';
+  staticSchema?: unknown;
+  pageWidth?: number;
+  pageHeight?: number;
+  basePdf?: string;
 }): Promise<LetterheadRow> {
   const result = await getPool()
     .request()
     .input('name', sql.NVarChar(255), input.name)
-    .input('static_schema', sql.NVarChar(sql.MAX), JSON.stringify(input.staticSchema))
-    .input('page_width', sql.Float, input.pageWidth)
-    .input('page_height', sql.Float, input.pageHeight)
+    .input('type', sql.NVarChar(10), input.type)
+    .input('static_schema', sql.NVarChar(sql.MAX), input.staticSchema !== undefined ? JSON.stringify(input.staticSchema) : null)
+    .input('page_width', sql.Float, input.pageWidth ?? null)
+    .input('page_height', sql.Float, input.pageHeight ?? null)
+    .input('base_pdf', sql.NVarChar(sql.MAX), input.basePdf ?? null)
     .query(`
-      INSERT INTO letterheads (name, static_schema, page_width, page_height)
-      OUTPUT INSERTED.id, INSERTED.name, INSERTED.static_schema, INSERTED.page_width,
-             INSERTED.page_height, INSERTED.created_at, INSERTED.updated_at
-      VALUES (@name, @static_schema, @page_width, @page_height)
+      INSERT INTO letterheads (name, type, static_schema, page_width, page_height, base_pdf)
+      OUTPUT INSERTED.id, INSERTED.name, INSERTED.type, INSERTED.static_schema, INSERTED.page_width,
+             INSERTED.page_height, INSERTED.base_pdf, INSERTED.created_at, INSERTED.updated_at
+      VALUES (@name, @type, @static_schema, @page_width, @page_height, @base_pdf)
     `);
   return parseLetterheadRow(result.recordset[0]);
 }
 
 export async function updateLetterhead(
   id: string,
-  input: { name?: string; staticSchema?: unknown; pageWidth?: number; pageHeight?: number }
+  input: { name?: string; staticSchema?: unknown; pageWidth?: number; pageHeight?: number; basePdf?: string }
 ): Promise<LetterheadRow | null> {
   const existing = await getLetterhead(id);
   if (!existing) return null;
 
   const name = input.name ?? existing.name;
-  const staticSchema = input.staticSchema ?? existing.static_schema;
+  const staticSchema = input.staticSchema !== undefined ? input.staticSchema : existing.static_schema;
   const pageWidth = input.pageWidth ?? existing.page_width;
   const pageHeight = input.pageHeight ?? existing.page_height;
+  const basePdf = input.basePdf ?? existing.base_pdf;
 
   const result = await getPool()
     .request()
     .input('id', sql.UniqueIdentifier, id)
     .input('name', sql.NVarChar(255), name)
-    .input('static_schema', sql.NVarChar(sql.MAX), JSON.stringify(staticSchema))
+    .input('static_schema', sql.NVarChar(sql.MAX), staticSchema !== null ? JSON.stringify(staticSchema) : null)
     .input('page_width', sql.Float, pageWidth)
     .input('page_height', sql.Float, pageHeight)
+    .input('base_pdf', sql.NVarChar(sql.MAX), basePdf)
     .query(`
       UPDATE letterheads
       SET name = @name, static_schema = @static_schema, page_width = @page_width,
-          page_height = @page_height, updated_at = GETUTCDATE()
-      OUTPUT INSERTED.id, INSERTED.name, INSERTED.static_schema, INSERTED.page_width,
-             INSERTED.page_height, INSERTED.created_at, INSERTED.updated_at
+          page_height = @page_height, base_pdf = @base_pdf, updated_at = GETUTCDATE()
+      OUTPUT INSERTED.id, INSERTED.name, INSERTED.type, INSERTED.static_schema, INSERTED.page_width,
+             INSERTED.page_height, INSERTED.base_pdf, INSERTED.created_at, INSERTED.updated_at
       WHERE id = @id
     `);
   const row = result.recordset[0];
