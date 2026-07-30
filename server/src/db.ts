@@ -139,6 +139,18 @@ async function ensureTables(): Promise<void> {
     )
   `);
 
+  await p.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'company_assets')
+    CREATE TABLE company_assets (
+      id               UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+      name             NVARCHAR(255)    NOT NULL,
+      file_path        NVARCHAR(1000)   NOT NULL,
+      mime_type        NVARCHAR(100)    NOT NULL,
+      file_size_bytes  BIGINT           NOT NULL,
+      created_at       DATETIME2        NOT NULL DEFAULT GETUTCDATE()
+    )
+  `);
+
   console.log('Tables ready');
 }
 
@@ -182,6 +194,15 @@ export interface GeneratedPdfRow {
   file_path: string;
   file_size_bytes: number | null;
   generated_at: string;
+}
+
+export interface CompanyAssetRow {
+  id: string;
+  name: string;
+  file_path: string;
+  mime_type: string;
+  file_size_bytes: number;
+  created_at: string;
 }
 
 // ─── pdf_templates ───────────────────────────────────────────────────────────
@@ -551,4 +572,55 @@ export async function getGeneratedPdf(id: string): Promise<GeneratedPdfRow | nul
     inputs_snapshot: JSON.parse(row.inputs_snapshot as string),
     schema_snapshot: JSON.parse(row.schema_snapshot as string),
   };
+}
+
+// ─── company_assets ──────────────────────────────────────────────────────────
+
+export async function listAssets(): Promise<CompanyAssetRow[]> {
+  const result = await getPool().request().query(
+    'SELECT id, name, file_path, mime_type, file_size_bytes, created_at FROM company_assets ORDER BY created_at DESC'
+  );
+  return result.recordset;
+}
+
+export async function getAsset(id: string): Promise<CompanyAssetRow | null> {
+  const result = await getPool()
+    .request()
+    .input('id', sql.UniqueIdentifier, id)
+    .query('SELECT id, name, file_path, mime_type, file_size_bytes, created_at FROM company_assets WHERE id = @id');
+  return result.recordset[0] ?? null;
+}
+
+export async function createAsset(input: {
+  name: string;
+  filePath: string;
+  mimeType: string;
+  fileSizeBytes: number;
+}): Promise<CompanyAssetRow> {
+  const result = await getPool()
+    .request()
+    .input('name', sql.NVarChar(255), input.name)
+    .input('file_path', sql.NVarChar(1000), input.filePath)
+    .input('mime_type', sql.NVarChar(100), input.mimeType)
+    .input('file_size_bytes', sql.BigInt, input.fileSizeBytes)
+    .query(`
+      INSERT INTO company_assets (name, file_path, mime_type, file_size_bytes)
+      OUTPUT INSERTED.id, INSERTED.name, INSERTED.file_path, INSERTED.mime_type,
+             INSERTED.file_size_bytes, INSERTED.created_at
+      VALUES (@name, @file_path, @mime_type, @file_size_bytes)
+    `);
+  return result.recordset[0];
+}
+
+export async function deleteAsset(id: string): Promise<CompanyAssetRow | null> {
+  const result = await getPool()
+    .request()
+    .input('id', sql.UniqueIdentifier, id)
+    .query(`
+      DELETE FROM company_assets
+      OUTPUT DELETED.id, DELETED.name, DELETED.file_path, DELETED.mime_type,
+             DELETED.file_size_bytes, DELETED.created_at
+      WHERE id = @id
+    `);
+  return result.recordset[0] ?? null;
 }
