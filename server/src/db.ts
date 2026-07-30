@@ -151,6 +151,19 @@ async function ensureTables(): Promise<void> {
     )
   `);
 
+  await p.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'letterheads')
+    CREATE TABLE letterheads (
+      id               UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+      name             NVARCHAR(255)    NOT NULL,
+      static_schema    NVARCHAR(MAX)    NOT NULL,
+      page_width       FLOAT            NOT NULL,
+      page_height      FLOAT            NOT NULL,
+      created_at       DATETIME2        NOT NULL DEFAULT GETUTCDATE(),
+      updated_at       DATETIME2        NOT NULL DEFAULT GETUTCDATE()
+    )
+  `);
+
   console.log('Tables ready');
 }
 
@@ -203,6 +216,25 @@ export interface CompanyAssetRow {
   mime_type: string;
   file_size_bytes: number;
   created_at: string;
+}
+
+export interface LetterheadRow {
+  id: string;
+  name: string;
+  static_schema: unknown;
+  page_width: number;
+  page_height: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LetterheadSummaryRow {
+  id: string;
+  name: string;
+  page_width: number;
+  page_height: number;
+  created_at: string;
+  updated_at: string;
 }
 
 // ─── pdf_templates ───────────────────────────────────────────────────────────
@@ -623,4 +655,88 @@ export async function deleteAsset(id: string): Promise<CompanyAssetRow | null> {
       WHERE id = @id
     `);
   return result.recordset[0] ?? null;
+}
+
+// ─── letterheads ──────────────────────────────────────────────────────────────
+
+export async function listLetterheads(): Promise<LetterheadSummaryRow[]> {
+  const result = await getPool().request().query(
+    'SELECT id, name, page_width, page_height, created_at, updated_at FROM letterheads ORDER BY updated_at DESC'
+  );
+  return result.recordset;
+}
+
+function parseLetterheadRow(row: Record<string, unknown>): LetterheadRow {
+  return {
+    ...row,
+    static_schema: JSON.parse(row.static_schema as string),
+  } as LetterheadRow;
+}
+
+export async function getLetterhead(id: string): Promise<LetterheadRow | null> {
+  const result = await getPool()
+    .request()
+    .input('id', sql.UniqueIdentifier, id)
+    .query('SELECT id, name, static_schema, page_width, page_height, created_at, updated_at FROM letterheads WHERE id = @id');
+  const row = result.recordset[0];
+  return row ? parseLetterheadRow(row) : null;
+}
+
+export async function createLetterhead(input: {
+  name: string;
+  staticSchema: unknown;
+  pageWidth: number;
+  pageHeight: number;
+}): Promise<LetterheadRow> {
+  const result = await getPool()
+    .request()
+    .input('name', sql.NVarChar(255), input.name)
+    .input('static_schema', sql.NVarChar(sql.MAX), JSON.stringify(input.staticSchema))
+    .input('page_width', sql.Float, input.pageWidth)
+    .input('page_height', sql.Float, input.pageHeight)
+    .query(`
+      INSERT INTO letterheads (name, static_schema, page_width, page_height)
+      OUTPUT INSERTED.id, INSERTED.name, INSERTED.static_schema, INSERTED.page_width,
+             INSERTED.page_height, INSERTED.created_at, INSERTED.updated_at
+      VALUES (@name, @static_schema, @page_width, @page_height)
+    `);
+  return parseLetterheadRow(result.recordset[0]);
+}
+
+export async function updateLetterhead(
+  id: string,
+  input: { name?: string; staticSchema?: unknown; pageWidth?: number; pageHeight?: number }
+): Promise<LetterheadRow | null> {
+  const existing = await getLetterhead(id);
+  if (!existing) return null;
+
+  const name = input.name ?? existing.name;
+  const staticSchema = input.staticSchema ?? existing.static_schema;
+  const pageWidth = input.pageWidth ?? existing.page_width;
+  const pageHeight = input.pageHeight ?? existing.page_height;
+
+  const result = await getPool()
+    .request()
+    .input('id', sql.UniqueIdentifier, id)
+    .input('name', sql.NVarChar(255), name)
+    .input('static_schema', sql.NVarChar(sql.MAX), JSON.stringify(staticSchema))
+    .input('page_width', sql.Float, pageWidth)
+    .input('page_height', sql.Float, pageHeight)
+    .query(`
+      UPDATE letterheads
+      SET name = @name, static_schema = @static_schema, page_width = @page_width,
+          page_height = @page_height, updated_at = GETUTCDATE()
+      OUTPUT INSERTED.id, INSERTED.name, INSERTED.static_schema, INSERTED.page_width,
+             INSERTED.page_height, INSERTED.created_at, INSERTED.updated_at
+      WHERE id = @id
+    `);
+  const row = result.recordset[0];
+  return row ? parseLetterheadRow(row) : null;
+}
+
+export async function deleteLetterhead(id: string): Promise<void> {
+  await getPool()
+    .request()
+    .input('id', sql.UniqueIdentifier, id)
+    .query('DELETE FROM letterheads WHERE id = @id');
 }
