@@ -441,14 +441,23 @@ export default function TemplateDesigner() {
     setHeaderFooterOpen(false);
   };
 
-  const handleLetterheadPicked = (staticSchema: import('@pdfme/common').Schema[]) => {
+  const handleLetterheadPicked = (selection: { type: 'fields'; staticSchema: import('@pdfme/common').Schema[] } | { type: 'pdf'; basePdf: string }) => {
     if (!designerRef.current) return;
     const t = designerRef.current.getTemplate();
-    if (!isBlankPdf(t.basePdf)) return;
-    designerRef.current.updateTemplate({
-      ...t,
-      basePdf: { ...t.basePdf, staticSchema },
-    });
+
+    if (selection.type === 'fields') {
+      if (!isBlankPdf(t.basePdf)) return;
+      designerRef.current.updateTemplate({
+        ...t,
+        basePdf: { ...t.basePdf, staticSchema: selection.staticSchema },
+      });
+    } else {
+      designerRef.current.updateTemplate({
+        ...t,
+        basePdf: selection.basePdf,
+      });
+    }
+
     setTemplateVersion(v => v + 1);
     setLetterheadPickerOpen(false);
   };
@@ -727,7 +736,6 @@ export default function TemplateDesigner() {
             icon={<BookOpen size={13} />}
             label="Apply Letterhead"
             onClick={() => setLetterheadPickerOpen(true)}
-            disabled={!isBlank}
           />
         </Group>
 
@@ -845,6 +853,7 @@ export default function TemplateDesigner() {
       {/* Letterhead picker modal */}
       {letterheadPickerOpen && (
         <LetterheadPicker
+          currentIsBlank={isBlank}
           onSelect={handleLetterheadPicked}
           onClose={() => setLetterheadPickerOpen(false)}
         />

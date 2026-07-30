@@ -4,11 +4,16 @@ import type { Schema } from '@pdfme/common';
 import { api } from '../lib/api.js';
 import type { LetterheadSummary } from '../types.js';
 
+type LetterheadSelection =
+  | { type: 'fields'; staticSchema: Schema[] }
+  | { type: 'pdf'; basePdf: string };
+
 export default function LetterheadPicker(props: {
-  onSelect: (staticSchema: Schema[]) => void;
+  currentIsBlank: boolean;
+  onSelect: (selection: LetterheadSelection) => void;
   onClose: () => void;
 }) {
-  const { onSelect, onClose } = props;
+  const { currentIsBlank, onSelect, onClose } = props;
   const [letterheads, setLetterheads] = useState<LetterheadSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +31,12 @@ export default function LetterheadPicker(props: {
     setError(null);
     try {
       const full = await api.getLetterhead(letterhead.id);
-      onSelect(full.static_schema as Schema[]);
+      if (full.type === 'pdf') {
+        if (!full.base_pdf) throw new Error('This letterhead has no stored PDF content.');
+        onSelect({ type: 'pdf', basePdf: full.base_pdf });
+      } else {
+        onSelect({ type: 'fields', staticSchema: (full.static_schema ?? []) as Schema[] });
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -73,26 +83,32 @@ export default function LetterheadPicker(props: {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {letterheads.map(lh => (
-                <button
-                  key={lh.id}
-                  onClick={() => handlePick(lh)}
-                  disabled={selectingId !== null}
-                  style={{
-                    textAlign: 'left', padding: '10px 14px', borderRadius: 10,
-                    border: '1px solid #e6e6e6', background: 'transparent',
-                    cursor: selectingId ? 'wait' : 'pointer',
-                    opacity: selectingId && selectingId !== lh.id ? 0.5 : 1,
-                  }}
-                >
-                  <div style={{ color: '#000', fontWeight: 600, fontSize: 13 }}>
-                    {selectingId === lh.id ? 'Loading…' : lh.name}
-                  </div>
-                  <div style={{ color: 'rgba(0,0,0,0.55)', fontSize: 11 }}>
-                    {lh.page_width}×{lh.page_height}mm
-                  </div>
-                </button>
-              ))}
+              {letterheads.map(lh => {
+                const incompatible = lh.type === 'fields' && !currentIsBlank;
+                return (
+                  <button
+                    key={lh.id}
+                    onClick={() => handlePick(lh)}
+                    disabled={incompatible || selectingId !== null}
+                    style={{
+                      textAlign: 'left', padding: '10px 14px', borderRadius: 10,
+                      border: '1px solid #e6e6e6', background: 'transparent',
+                      cursor: incompatible ? 'not-allowed' : selectingId ? 'wait' : 'pointer',
+                      opacity: incompatible ? 0.4 : (selectingId && selectingId !== lh.id ? 0.5 : 1),
+                    }}
+                  >
+                    <div style={{ color: '#000', fontWeight: 600, fontSize: 13 }}>
+                      {selectingId === lh.id ? 'Loading…' : lh.name}
+                    </div>
+                    <div style={{ color: 'rgba(0,0,0,0.55)', fontSize: 11 }}>
+                      {lh.type === 'pdf'
+                        ? 'Imported PDF'
+                        : `${lh.page_width}×${lh.page_height}mm`}
+                      {incompatible && ' — requires a blank-page template'}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
