@@ -397,24 +397,30 @@ export default function TemplateDesigner() {
     setAiOpen(false);
   };
 
-  const handleAssetPicked = (dataUrl: string) => {
+  const handleAssetPicked = (content: string, mimeType: string) => {
     if (!designerRef.current) return;
     const t = designerRef.current.getTemplate();
     const pageIndex = designerRef.current.getPageCursor();
+    const uniqueSuffix = `${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+    const newField = mimeType === 'image/svg+xml'
+      ? {
+          name: `svg_${uniqueSuffix}`,
+          type: 'svg',
+          content,
+          position: { x: 20, y: 20 },
+          width: 40,
+          height: 40,
+        }
+      : {
+          name: `image_${uniqueSuffix}`,
+          type: 'image',
+          content,
+          position: { x: 20, y: 20 },
+          width: 40,
+          height: 40,
+        };
     const schemas = t.schemas.map((page, i) =>
-      i === pageIndex
-        ? [
-            ...page,
-            {
-              name: `image_${Date.now()}`,
-              type: 'image',
-              content: dataUrl,
-              position: { x: 20, y: 20 },
-              width: 40,
-              height: 40,
-            },
-          ]
-        : page
+      i === pageIndex ? [...page, newField] : page
     );
     designerRef.current.updateTemplate({ ...t, schemas });
     setTemplateVersion(v => v + 1);

@@ -1,5 +1,5 @@
-import { Router, Request, Response } from 'express';
-import multer from 'multer';
+import { Router, Request, Response, NextFunction } from 'express';
+import multer, { MulterError } from 'multer';
 import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -21,6 +21,21 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
 });
+
+function handleUpload(req: Request, res: Response, next: NextFunction) {
+  upload.single('file')(req, res, (err: unknown) => {
+    if (!err) {
+      next();
+      return;
+    }
+    if (err instanceof MulterError && err.code === 'LIMIT_FILE_SIZE') {
+      res.status(400).json({ error: 'File is too large. Maximum size is 10MB.' });
+      return;
+    }
+    const message = err instanceof Error ? err.message : 'Upload failed';
+    res.status(400).json({ error: message });
+  });
+}
 
 /**
  * @openapi
@@ -47,7 +62,7 @@ const upload = multer({
  *       400:
  *         description: Missing file, missing name, or unsupported file type
  */
-assetsRouter.post('/', upload.single('file'), async (req: Request, res: Response) => {
+assetsRouter.post('/', handleUpload, async (req: Request, res: Response) => {
   const file = req.file;
   const name = (req.body as { name?: string }).name;
 

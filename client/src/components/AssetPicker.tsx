@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import type { AssetRecord } from '../types.js';
 
-async function fetchAssetAsDataUrl(id: string, _mimeType: string): Promise<string> {
+async function fetchAssetAsDataUrl(id: string): Promise<string> {
   const res = await fetch(api.assetFileUrl(id));
   if (!res.ok) throw new Error(`Failed to fetch asset: ${res.status}`);
   const blob = await res.blob();
@@ -15,8 +15,14 @@ async function fetchAssetAsDataUrl(id: string, _mimeType: string): Promise<strin
   });
 }
 
+async function fetchAssetAsText(id: string): Promise<string> {
+  const res = await fetch(api.assetFileUrl(id));
+  if (!res.ok) throw new Error(`Failed to fetch asset: ${res.status}`);
+  return res.text();
+}
+
 export default function AssetPicker(props: {
-  onSelect: (dataUrl: string) => void;
+  onSelect: (content: string, mimeType: string) => void;
   onClose: () => void;
 }) {
   const { onSelect, onClose } = props;
@@ -36,10 +42,13 @@ export default function AssetPicker(props: {
     setSelectingId(asset.id);
     setError(null);
     try {
-      const dataUrl = await fetchAssetAsDataUrl(asset.id, asset.mime_type);
-      onSelect(dataUrl);
+      const content = asset.mime_type === 'image/svg+xml'
+        ? await fetchAssetAsText(asset.id)
+        : await fetchAssetAsDataUrl(asset.id);
+      onSelect(content, asset.mime_type);
     } catch (err) {
       setError((err as Error).message);
+    } finally {
       setSelectingId(null);
     }
   };
