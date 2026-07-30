@@ -6,6 +6,7 @@ import { generatePdfRouter } from './routes/filledPdfs.js';
 import { aiFormRouter } from './routes/aiForm.js';
 import { aiPdfVisionRouter } from './routes/aiPdfVision.js';
 import { assetsRouter } from './routes/assets.js';
+import { letterheadsRouter } from './routes/letterheads.js';
 import { swaggerSpec, swaggerUi } from './swagger.js';
 import { initDb } from './db.js';
 
@@ -31,6 +32,7 @@ app.use('/templates', templatesRouter);
 app.use('/generate-pdf', generatePdfRouter);
 app.use('/ai-form', aiFormRouter);
 app.use('/assets', assetsRouter);
+app.use('/letterheads', letterheadsRouter);
 
 app.get('/docs/swagger.json', (_req, res) => res.json(swaggerSpec));
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
