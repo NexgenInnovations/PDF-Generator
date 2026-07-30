@@ -33,28 +33,47 @@ export const letterheadsRouter = Router();
  *         description: Missing or invalid fields
  */
 letterheadsRouter.post('/', async (req: Request, res: Response) => {
-  const { name, staticSchema, pageWidth, pageHeight } = req.body as {
+  const { name, type, staticSchema, pageWidth, pageHeight, basePdf } = req.body as {
     name?: string;
+    type?: 'fields' | 'pdf';
     staticSchema?: unknown;
     pageWidth?: number;
     pageHeight?: number;
+    basePdf?: string;
   };
 
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
     res.status(400).json({ error: 'name is required' });
     return;
   }
-  if (!Array.isArray(staticSchema)) {
-    res.status(400).json({ error: 'staticSchema is required and must be an array' });
-    return;
-  }
-  if (typeof pageWidth !== 'number' || typeof pageHeight !== 'number') {
-    res.status(400).json({ error: 'pageWidth and pageHeight are required numbers' });
-    return;
+
+  const resolvedType: 'fields' | 'pdf' = type === 'pdf' ? 'pdf' : 'fields';
+
+  if (resolvedType === 'fields') {
+    if (!Array.isArray(staticSchema)) {
+      res.status(400).json({ error: 'staticSchema is required and must be an array' });
+      return;
+    }
+    if (typeof pageWidth !== 'number' || typeof pageHeight !== 'number') {
+      res.status(400).json({ error: 'pageWidth and pageHeight are required numbers' });
+      return;
+    }
+  } else {
+    if (!basePdf || typeof basePdf !== 'string') {
+      res.status(400).json({ error: 'basePdf is required and must be a string' });
+      return;
+    }
   }
 
   try {
-    const letterhead = await createLetterhead({ name: name.trim(), staticSchema, pageWidth, pageHeight });
+    const letterhead = await createLetterhead({
+      name: name.trim(),
+      type: resolvedType,
+      staticSchema: resolvedType === 'fields' ? staticSchema : undefined,
+      pageWidth: resolvedType === 'fields' ? pageWidth : undefined,
+      pageHeight: resolvedType === 'fields' ? pageHeight : undefined,
+      basePdf: resolvedType === 'pdf' ? basePdf : undefined,
+    });
     res.status(201).json(letterhead);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected server error';
@@ -153,11 +172,12 @@ letterheadsRouter.get('/:id', async (req: Request, res: Response) => {
  *         description: Letterhead not found
  */
 letterheadsRouter.put('/:id', async (req: Request, res: Response) => {
-  const { name, staticSchema, pageWidth, pageHeight } = req.body as {
+  const { name, staticSchema, pageWidth, pageHeight, basePdf } = req.body as {
     name?: string;
     staticSchema?: unknown;
     pageWidth?: number;
     pageHeight?: number;
+    basePdf?: string;
   };
 
   if (name !== undefined && (typeof name !== 'string' || name.trim().length === 0)) {
@@ -168,6 +188,10 @@ letterheadsRouter.put('/:id', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'staticSchema must be an array' });
     return;
   }
+  if (basePdf !== undefined && typeof basePdf !== 'string') {
+    res.status(400).json({ error: 'basePdf must be a string' });
+    return;
+  }
 
   try {
     const updated = await updateLetterhead(req.params.id, {
@@ -175,6 +199,7 @@ letterheadsRouter.put('/:id', async (req: Request, res: Response) => {
       staticSchema,
       pageWidth,
       pageHeight,
+      basePdf,
     });
     if (!updated) {
       res.status(404).json({ error: 'Letterhead not found' });
