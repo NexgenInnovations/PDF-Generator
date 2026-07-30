@@ -19,6 +19,7 @@ import AssetPicker from '../components/AssetPicker.js';
 import LetterheadPicker from '../components/LetterheadPicker.js';
 import { detectFields } from '../lib/pdfFieldDetection.js';
 import { detectFieldsWithAiVision } from '../lib/aiPdfVisionDetection.js';
+import ChangePdfChoiceModal from '../components/ChangePdfChoiceModal.js';
 
 const BLANK_TEMPLATE: Template = {
   basePdf: { width: 210, height: 297, padding: [10, 10, 10, 10] },
@@ -257,6 +258,8 @@ export default function TemplateDesigner() {
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [isDetectingAi, setIsDetectingAi] = useState(false);
+  const [pendingPdfFile, setPendingPdfFile] = useState<File | null>(null);
+  const [changePdfChoiceOpen, setChangePdfChoiceOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jsonOpen, setJsonOpen] = useState(false);
   const [jsonText, setJsonText] = useState('');
@@ -553,16 +556,31 @@ export default function TemplateDesigner() {
 
   const handleBasePdfFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file || !designerRef.current) return;
+    setPendingPdfFile(file);
+    setChangePdfChoiceOpen(true);
+  };
+
+  const closeChangePdfChoice = () => {
+    setChangePdfChoiceOpen(false);
+    setPendingPdfFile(null);
+  };
+
+  const handleWriteOnPdf = () => {
+    const file = pendingPdfFile;
+    if (!file || !designerRef.current) return;
+    setChangePdfChoiceOpen(false);
+    setPendingPdfFile(null);
+
     const reader = new FileReader();
     reader.onload = async () => {
       const dataUrl = reader.result as string;
       const t = designerRef.current!.getTemplate();
 
       let detectedSchemas: import('@pdfme/common').Schema[][] | null = null;
-      let arrayBuffer: ArrayBuffer | null = null;
       try {
-        arrayBuffer = await file.arrayBuffer();
+        const arrayBuffer = await file.arrayBuffer();
         const schemas = await detectFields(arrayBuffer);
         const hasAnyFields = schemas.some(page => page.length > 0);
         if (hasAnyFields) detectedSchemas = schemas;
@@ -576,36 +594,54 @@ export default function TemplateDesigner() {
           checkTemplate(candidate);
           designerRef.current!.updateTemplate(candidate);
           setTemplateVersion(v => v + 1);
-          e.target.value = '';
           return;
         } catch (err) {
           setError(`Detected fields could not be applied: ${(err as Error).message}`);
-        }
-      } else if (arrayBuffer) {
-        setIsDetectingAi(true);
-        try {
-          const aiTemplate = await detectFieldsWithAiVision(arrayBuffer);
-          if (aiTemplate) {
-            try {
-              checkTemplate(aiTemplate);
-              designerRef.current!.updateTemplate(aiTemplate);
-              setTemplateVersion(v => v + 1);
-              e.target.value = '';
-              return;
-            } catch (err) {
-              setError(`AI-generated template could not be applied: ${(err as Error).message}`);
-            }
-          } else {
-            setError("Couldn't detect fields from this PDF automatically — the PDF has been set as the background.");
-          }
-        } finally {
-          setIsDetectingAi(false);
         }
       }
 
       designerRef.current!.updateTemplate({ ...t, basePdf: dataUrl });
       setTemplateVersion(v => v + 1);
-      e.target.value = '';
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRecreateWithAi = () => {
+    const file = pendingPdfFile;
+    if (!file || !designerRef.current) return;
+    setChangePdfChoiceOpen(false);
+    setPendingPdfFile(null);
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      const t = designerRef.current!.getTemplate();
+
+      setIsDetectingAi(true);
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const aiTemplate = await detectFieldsWithAiVision(arrayBuffer);
+        if (aiTemplate) {
+          try {
+            checkTemplate(aiTemplate);
+            designerRef.current!.updateTemplate(aiTemplate);
+            setTemplateVersion(v => v + 1);
+            return;
+          } catch (err) {
+            setError(`AI-generated template could not be applied: ${(err as Error).message}`);
+          }
+        } else {
+          setError("Couldn't detect fields from this PDF automatically — the PDF has been set as the background.");
+        }
+      } catch (err) {
+        console.warn('AI vision field detection failed, falling back to background-only update:', err);
+        setError("Couldn't detect fields from this PDF automatically — the PDF has been set as the background.");
+      } finally {
+        setIsDetectingAi(false);
+      }
+
+      designerRef.current!.updateTemplate({ ...t, basePdf: dataUrl });
+      setTemplateVersion(v => v + 1);
     };
     reader.readAsDataURL(file);
   };
@@ -839,6 +875,15 @@ export default function TemplateDesigner() {
           templateId={id ?? null}
           template={designerRef.current?.getTemplate() ?? BLANK_TEMPLATE}
           onClose={() => setApiPayloadOpen(false)}
+        />
+      )}
+
+      {/* Change PDF choice modal */}
+      {changePdfChoiceOpen && (
+        <ChangePdfChoiceModal
+          onWriteOnPdf={handleWriteOnPdf}
+          onRecreateWithAi={handleRecreateWithAi}
+          onClose={closeChangePdfChoice}
         />
       )}
 
