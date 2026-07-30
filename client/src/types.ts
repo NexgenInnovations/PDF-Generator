@@ -37,3 +37,16 @@ export interface AssetRecord {
   file_size_bytes: number;
   created_at: string;
 }
+
+export interface LetterheadSummary {
+  id: string;
+  name: string;
+  page_width: number;
+  page_height: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LetterheadRecord extends LetterheadSummary {
+  static_schema: unknown[];
+}

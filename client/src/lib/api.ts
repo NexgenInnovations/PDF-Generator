@@ -3,6 +3,8 @@ import type {
   TemplateSummary,
   PublishedVersionSummary,
   AssetRecord,
+  LetterheadSummary,
+  LetterheadRecord,
 } from "../types.js";
 import type { Template } from "@pdfme/common";
 
@@ -142,4 +144,27 @@ export const api = {
   deleteAsset: (id: string) => request<void>(`/assets/${id}`, { method: "DELETE" }),
 
   assetFileUrl: (id: string) => `${API_BASE}/assets/${id}/file`,
+
+  listLetterheads: () => request<LetterheadSummary[]>("/letterheads"),
+
+  getLetterhead: (id: string) => request<LetterheadRecord>(`/letterheads/${id}`),
+
+  createLetterhead: (name: string, staticSchema: unknown[], pageWidth: number, pageHeight: number) =>
+    request<LetterheadRecord>("/letterheads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, staticSchema, pageWidth, pageHeight }),
+    }),
+
+  updateLetterhead: (
+    id: string,
+    patch: { name?: string; staticSchema?: unknown[]; pageWidth?: number; pageHeight?: number }
+  ) =>
+    request<LetterheadRecord>(`/letterheads/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    }),
+
+  deleteLetterhead: (id: string) => request<void>(`/letterheads/${id}`, { method: "DELETE" }),
 };

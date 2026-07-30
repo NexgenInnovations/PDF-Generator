@@ -6,6 +6,7 @@ import {
   Settings,
   LogOut,
   Image,
+  BookOpen,
 } from 'lucide-react';
 import { useRole } from '../../context/RoleContext.js';
 import { Avatar, AvatarFallback } from '../ui/avatar.js';
@@ -90,6 +91,9 @@ export function Sidebar() {
         )}
         {(role === 'Admin' || role === 'Designer') && (
           <NavItem to="/assets" icon={<Image className="h-4 w-4" />} label="Assets" />
+        )}
+        {(role === 'Admin' || role === 'Designer') && (
+          <NavItem to="/letterheads" icon={<BookOpen className="h-4 w-4" />} label="Letterheads" />
         )}
         {role === 'Admin' && (
           <NavItem to="/settings" icon={<Settings className="h-4 w-4" />} label="Settings" />
