@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Plus, Trash2, Pencil, AlertCircle } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Plus, Trash2, Pencil, AlertCircle, Upload } from 'lucide-react';
 import { api } from '../lib/api.js';
 import type { LetterheadSummary } from '../types.js';
 import type { Schema } from '@pdfme/common';
@@ -29,6 +29,8 @@ export default function Letterheads() {
     name: string;
     basePdf: { width: number; height: number; padding: [number, number, number, number]; staticSchema?: Schema[] };
   } | null>(null);
+  const [importing, setImporting] = useState(false);
+  const pdfFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const refresh = () => {
     setLoading(true);
@@ -52,6 +54,37 @@ export default function Letterheads() {
     });
   };
 
+  const handleImportClick = () => pdfFileInputRef.current?.click();
+
+  const handlePdfFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    const name = window.prompt('Name this letterhead', file.name.replace(/\.pdf$/i, ''));
+    if (!name || name.trim().length === 0) return;
+
+    setImporting(true);
+    setError(null);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const basePdf = reader.result as string;
+        await api.createLetterhead({ name: name.trim(), type: 'pdf', basePdf });
+        refresh();
+      } catch (err) {
+        setError((err as Error).message);
+      } finally {
+        setImporting(false);
+      }
+    };
+    reader.onerror = () => {
+      setError('Could not read the selected file.');
+      setImporting(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const startEdit = async (summary: LetterheadSummary) => {
     try {
       const full = await api.getLetterhead(summary.id);
@@ -59,8 +92,8 @@ export default function Letterheads() {
         id: full.id,
         name: full.name,
         basePdf: {
-          width: full.page_width,
-          height: full.page_height,
+          width: full.page_width ?? PAGE_SIZES_PORTRAIT_MM.A4.width,
+          height: full.page_height ?? PAGE_SIZES_PORTRAIT_MM.A4.height,
           padding: [10, 10, 10, 10],
           staticSchema: full.static_schema as Schema[],
         },
@@ -76,7 +109,13 @@ export default function Letterheads() {
       if (editorState.id) {
         await api.updateLetterhead(editorState.id, { staticSchema });
       } else {
-        await api.createLetterhead(editorState.name, staticSchema, editorState.basePdf.width, editorState.basePdf.height);
+        await api.createLetterhead({
+          name: editorState.name,
+          type: 'fields',
+          staticSchema,
+          pageWidth: editorState.basePdf.width,
+          pageHeight: editorState.basePdf.height,
+        });
       }
       setEditorState(null);
       refresh();
@@ -120,10 +159,23 @@ export default function Letterheads() {
           <p className="text-sm" style={{ color: 'var(--nx-ink-secondary)' }}>
             {letterheads.length} letterhead{letterheads.length === 1 ? '' : 's'}
           </p>
-          <Button onClick={startCreate}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            New Letterhead
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={startCreate}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              New Letterhead
+            </Button>
+            <Button onClick={handleImportClick} disabled={importing} variant="outline">
+              <Upload className="h-4 w-4 mr-1.5" />
+              {importing ? 'Importing…' : 'Import PDF'}
+            </Button>
+            <input
+              ref={pdfFileInputRef}
+              type="file"
+              accept="application/pdf"
+              style={{ display: 'none' }}
+              onChange={handlePdfFileSelected}
+            />
+          </div>
         </div>
 
         {loading ? (
@@ -138,17 +190,19 @@ export default function Letterheads() {
                   {lh.name}
                 </p>
                 <p className="text-xs" style={{ color: 'var(--nx-ink-muted)' }}>
-                  {lh.page_width}×{lh.page_height}mm
+                  {lh.type === 'pdf' ? 'Imported PDF' : `${lh.page_width}×${lh.page_height}mm`}
                 </p>
                 <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => startEdit(lh)}
-                    className="flex items-center gap-1 text-xs"
-                    style={{ color: 'var(--nx-ink-secondary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                  >
-                    <Pencil className="h-3 w-3" />
-                    Edit
-                  </button>
+                  {lh.type === 'fields' && (
+                    <button
+                      onClick={() => startEdit(lh)}
+                      className="flex items-center gap-1 text-xs"
+                      style={{ color: 'var(--nx-ink-secondary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                    >
+                      <Pencil className="h-3 w-3" />
+                      Edit
+                    </button>
+                  )}
                   <button
                     onClick={() => handleRename(lh.id, lh.name)}
                     className="text-xs"

@@ -149,16 +149,23 @@ export const api = {
 
   getLetterhead: (id: string) => request<LetterheadRecord>(`/letterheads/${id}`),
 
-  createLetterhead: (name: string, staticSchema: unknown[], pageWidth: number, pageHeight: number) =>
+  createLetterhead: (input: {
+    name: string;
+    type: "fields" | "pdf";
+    staticSchema?: unknown[];
+    pageWidth?: number;
+    pageHeight?: number;
+    basePdf?: string;
+  }) =>
     request<LetterheadRecord>("/letterheads", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, staticSchema, pageWidth, pageHeight }),
+      body: JSON.stringify(input),
     }),
 
   updateLetterhead: (
     id: string,
-    patch: { name?: string; staticSchema?: unknown[]; pageWidth?: number; pageHeight?: number }
+    patch: { name?: string; staticSchema?: unknown[]; pageWidth?: number; pageHeight?: number; basePdf?: string }
   ) =>
     request<LetterheadRecord>(`/letterheads/${id}`, {
       method: "PUT",

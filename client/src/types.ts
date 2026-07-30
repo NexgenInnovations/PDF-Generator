@@ -41,12 +41,14 @@ export interface AssetRecord {
 export interface LetterheadSummary {
   id: string;
   name: string;
-  page_width: number;
-  page_height: number;
+  type: 'fields' | 'pdf';
+  page_width: number | null;
+  page_height: number | null;
   created_at: string;
   updated_at: string;
 }
 
 export interface LetterheadRecord extends LetterheadSummary {
-  static_schema: unknown[];
+  static_schema: unknown[] | null;
+  base_pdf: string | null;
 }
