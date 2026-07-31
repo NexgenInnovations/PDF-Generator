@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
+import { createHash } from 'crypto';
 import { generatePdf } from '../services/pdfService.js';
-import { getTemplate, getPublishedVersion, getLatestPublishedVersion, createFilledSubmission, createGeneratedPdf } from '../db.js';
+import { getTemplate, getPublishedVersion, getLatestPublishedVersion, createFilledSubmission, createGeneratedPdf, createSignatureEvent } from '../db.js';
 import type { Template } from '@pdfme/common';
 
 export const generatePdfRouter = Router();
@@ -75,16 +76,41 @@ export const generatePdfRouter = Router();
  *               $ref: '#/components/schemas/Error'
  */
 generatePdfRouter.post('/', async (req: Request, res: Response) => {
-  const { template_id, inputs, version, tag } = req.body as {
+  const { template_id, inputs, version, tag, signatureEvents } = req.body as {
     template_id?: string;
     inputs?: Record<string, string>[];
     version?: number;
     tag?: string;
+    signatureEvents?: { fieldName?: string; signerName?: string; signerEmail?: string }[];
   };
 
   if (!template_id || !Array.isArray(inputs) || inputs.length === 0) {
     res.status(400).json({ error: 'template_id and a non-empty inputs array are required' });
     return;
+  }
+
+  const validatedSignatureEvents: { fieldName: string; signerName: string; signerEmail: string }[] = [];
+  if (signatureEvents !== undefined) {
+    if (!Array.isArray(signatureEvents)) {
+      res.status(400).json({ error: 'signatureEvents must be an array' });
+      return;
+    }
+    for (const event of signatureEvents) {
+      if (
+        !event ||
+        typeof event.fieldName !== 'string' || event.fieldName.trim().length === 0 ||
+        typeof event.signerName !== 'string' || event.signerName.trim().length === 0 ||
+        typeof event.signerEmail !== 'string' || event.signerEmail.trim().length === 0
+      ) {
+        res.status(400).json({ error: 'Each signatureEvents entry requires fieldName, signerName, and signerEmail' });
+        return;
+      }
+      validatedSignatureEvents.push({
+        fieldName: event.fieldName.trim(),
+        signerName: event.signerName.trim(),
+        signerEmail: event.signerEmail.trim(),
+      });
+    }
   }
 
   try {
@@ -122,8 +148,23 @@ generatePdfRouter.post('/', async (req: Request, res: Response) => {
         filePath: 'generated-in-memory',
         fileSizeBytes: pdf.length,
       });
+
+      if (validatedSignatureEvents.length > 0) {
+        const documentHash = createHash('sha256').update(pdf).digest('hex');
+        const ipAddress = req.ip ?? null;
+        for (const event of validatedSignatureEvents) {
+          await createSignatureEvent({
+            submissionId: submission.id,
+            fieldName: event.fieldName,
+            signerName: event.signerName,
+            signerEmail: event.signerEmail,
+            ipAddress,
+            documentHash,
+          });
+        }
+      }
     } catch (dbErr) {
-      console.error('Failed to record submission/generated_pdf:', dbErr);
+      console.error('Failed to record submission/generated_pdf/signature_events:', dbErr);
     }
 
     res.setHeader('Content-Type', 'application/pdf');

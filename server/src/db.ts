@@ -198,6 +198,20 @@ async function ensureTables(): Promise<void> {
     ALTER TABLE letterheads ALTER COLUMN page_height FLOAT NULL
   `);
 
+  await p.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'signature_events')
+    CREATE TABLE signature_events (
+      id              UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+      submission_id   UNIQUEIDENTIFIER NOT NULL REFERENCES filled_submissions(id) ON DELETE CASCADE,
+      field_name      NVARCHAR(255)    NOT NULL,
+      signer_name     NVARCHAR(255)    NOT NULL,
+      signer_email    NVARCHAR(320)    NOT NULL,
+      signed_at       DATETIME2        NOT NULL DEFAULT GETUTCDATE(),
+      ip_address      NVARCHAR(45)     NULL,
+      document_hash   NVARCHAR(64)     NOT NULL
+    )
+  `);
+
   console.log('Tables ready');
 }
 
@@ -241,6 +255,17 @@ export interface GeneratedPdfRow {
   file_path: string;
   file_size_bytes: number | null;
   generated_at: string;
+}
+
+export interface SignatureEventRow {
+  id: string;
+  submission_id: string;
+  field_name: string;
+  signer_name: string;
+  signer_email: string;
+  signed_at: string;
+  ip_address: string | null;
+  document_hash: string;
 }
 
 export interface CompanyAssetRow {
@@ -782,4 +807,44 @@ export async function deleteLetterhead(id: string): Promise<void> {
     .request()
     .input('id', sql.UniqueIdentifier, id)
     .query('DELETE FROM letterheads WHERE id = @id');
+}
+
+// ─── signature_events ───────────────────────────────────────────────────────
+
+export async function createSignatureEvent(input: {
+  submissionId: string;
+  fieldName: string;
+  signerName: string;
+  signerEmail: string;
+  ipAddress: string | null;
+  documentHash: string;
+}): Promise<SignatureEventRow> {
+  const result = await getPool()
+    .request()
+    .input('submission_id', sql.UniqueIdentifier, input.submissionId)
+    .input('field_name', sql.NVarChar(255), input.fieldName)
+    .input('signer_name', sql.NVarChar(255), input.signerName)
+    .input('signer_email', sql.NVarChar(320), input.signerEmail)
+    .input('ip_address', sql.NVarChar(45), input.ipAddress)
+    .input('document_hash', sql.NVarChar(64), input.documentHash)
+    .query(`
+      INSERT INTO signature_events (submission_id, field_name, signer_name, signer_email, ip_address, document_hash)
+      OUTPUT INSERTED.id, INSERTED.submission_id, INSERTED.field_name, INSERTED.signer_name,
+             INSERTED.signer_email, INSERTED.signed_at, INSERTED.ip_address, INSERTED.document_hash
+      VALUES (@submission_id, @field_name, @signer_name, @signer_email, @ip_address, @document_hash)
+    `);
+  return result.recordset[0];
+}
+
+export async function listSignatureEventsForSubmission(submissionId: string): Promise<SignatureEventRow[]> {
+  const result = await getPool()
+    .request()
+    .input('submission_id', sql.UniqueIdentifier, submissionId)
+    .query(`
+      SELECT id, submission_id, field_name, signer_name, signer_email, signed_at, ip_address, document_hash
+      FROM signature_events
+      WHERE submission_id = @submission_id
+      ORDER BY signed_at ASC
+    `);
+  return result.recordset;
 }
