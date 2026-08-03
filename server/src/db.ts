@@ -596,6 +596,22 @@ export async function getFilledSubmission(id: string): Promise<FilledSubmissionR
   return { ...row, inputs: JSON.parse(row.inputs as string) };
 }
 
+export async function listSubmissionsForTemplate(templateId: string): Promise<FilledSubmissionRow[]> {
+  const result = await getPool()
+    .request()
+    .input('tid', sql.UniqueIdentifier, templateId)
+    .query(`
+      SELECT id, template_id, template_version, [inputs], submitted_at
+      FROM filled_submissions
+      WHERE template_id = @tid
+      ORDER BY submitted_at DESC
+    `);
+  return result.recordset.map(row => ({
+    ...row,
+    inputs: JSON.parse(row.inputs as string),
+  }));
+}
+
 // ─── generated_pdfs ──────────────────────────────────────────────────────────
 
 export async function createGeneratedPdf(opts: {
