@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Edit2, Trash2, FileText, Grid, List, AlertCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, FileText, Grid, List, AlertCircle, ClipboardList } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { useRole } from '../context/RoleContext.js';
 import type { TemplateSummary } from '../types.js';
@@ -245,6 +245,20 @@ export default function TemplateList() {
                       </Button>
                     </Link>
                   )}
+                  {canEdit && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Link to={`/templates/${t.id}/submissions`}>
+                            <Button size="icon" variant="outline" className="h-8 w-8">
+                              <ClipboardList className="h-3.5 w-3.5" />
+                            </Button>
+                          </Link>
+                        </TooltipTrigger>
+                        <TooltipContent>Submissions</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
                   {canDelete && (
                     <TooltipProvider>
                       <Tooltip>
@@ -309,6 +323,14 @@ export default function TemplateList() {
                             <Button size="sm" variant="secondary">
                               <Edit2 className="h-3 w-3" />
                               Edit
+                            </Button>
+                          </Link>
+                        )}
+                        {canEdit && (
+                          <Link to={`/templates/${t.id}/submissions`}>
+                            <Button size="sm" variant="secondary">
+                              <ClipboardList className="h-3 w-3" />
+                              Submissions
                             </Button>
                           </Link>
                         )}

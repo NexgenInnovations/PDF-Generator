@@ -8,6 +8,7 @@ const TemplateDesigner = lazy(() => import('./pages/TemplateDesigner.js'));
 const FormFill = lazy(() => import('./pages/FormFill.js'));
 const Assets = lazy(() => import('./pages/Assets.js'));
 const Letterheads = lazy(() => import('./pages/Letterheads.js'));
+const Submissions = lazy(() => import('./pages/Submissions.js'));
 const NotFound = lazy(() => import('./pages/NotFound.js'));
 
 function RouteFallback() {
@@ -63,6 +64,14 @@ export default function App() {
           element={
             <RoleGuard allowed={['Admin', 'Designer']}>
               <Letterheads />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="/templates/:id/submissions"
+          element={
+            <RoleGuard allowed={['Admin', 'Designer']}>
+              <Submissions />
             </RoleGuard>
           }
         />
