@@ -1,14 +1,15 @@
 import { useRef, useState } from 'react';
 import { Loader2, Send, Sparkles } from 'lucide-react';
 import type { Template } from '@pdfme/common';
-import { api, type AiChatMessage } from '../lib/api.js';
+import { api, type AiChatMessage, type AiOccupiedRegion } from '../lib/api.js';
 
 interface AskAiPanelProps {
   onClose: () => void;
   onTemplateReady: (template: Template) => void;
+  occupiedRegions?: AiOccupiedRegion[];
 }
 
-export default function AskAiPanel({ onClose, onTemplateReady }: AskAiPanelProps) {
+export default function AskAiPanel({ onClose, onTemplateReady, occupiedRegions }: AskAiPanelProps) {
   const [messages, setMessages] = useState<AiChatMessage[]>([
     { role: 'assistant', content: "Describe the form you'd like to create — what's it for, and what fields does it need?" },
   ]);
@@ -26,7 +27,7 @@ export default function AskAiPanel({ onClose, onTemplateReady }: AskAiPanelProps
     setSending(true);
     setError(null);
     try {
-      const res = await api.aiFormChat(next);
+      const res = await api.aiFormChat(next, occupiedRegions);
       setMessages([...next, { role: 'assistant', content: res.message }]);
       if (res.done && res.template) {
         onTemplateReady(res.template);

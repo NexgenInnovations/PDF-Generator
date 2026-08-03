@@ -398,15 +398,59 @@ export default function TemplateDesigner() {
     }
   };
 
-  const handleAiTemplateReady = (template: Template) => {
+  const PDF_LETTERHEAD_TOP_MARGIN_MM = 35;
+  const PDF_LETTERHEAD_BOTTOM_MARGIN_MM = 20;
+
+  const getAiOccupiedRegions = (): { x: number; y: number; width: number; height: number }[] => {
+    if (!designerRef.current) return [];
+    const t = designerRef.current.getTemplate();
+    const pageIndex = designerRef.current.getPageCursor();
+    const currentPageFields = t.schemas[pageIndex] ?? [];
+    const currentPageFieldRegions = currentPageFields.map(f => ({
+      x: f.position.x,
+      y: f.position.y,
+      width: f.width,
+      height: f.height,
+    }));
+
+    if (!isBlankPdf(t.basePdf)) {
+      // A custom-PDF letterhead (e.g. an uploaded/imported PDF) has no structured
+      // field data for its header/footer branding — we can't know exactly where the
+      // logo or footer sit. Assume a safe top and bottom band are occupied instead.
+      const pageWidth = PAGE_SIZES_PORTRAIT_MM.A4.width;
+      const pageHeight = PAGE_SIZES_PORTRAIT_MM.A4.height;
+      return [
+        { x: 0, y: 0, width: pageWidth, height: PDF_LETTERHEAD_TOP_MARGIN_MM },
+        { x: 0, y: pageHeight - PDF_LETTERHEAD_BOTTOM_MARGIN_MM, width: pageWidth, height: PDF_LETTERHEAD_BOTTOM_MARGIN_MM },
+        ...currentPageFieldRegions,
+      ];
+    }
+
+    const staticFieldRegions = (t.basePdf.staticSchema ?? []).map(f => ({
+      x: f.position.x,
+      y: f.position.y,
+      width: f.width,
+      height: f.height,
+    }));
+    return [...staticFieldRegions, ...currentPageFieldRegions];
+  };
+
+  const handleAiTemplateReady = (aiTemplate: Template) => {
     if (!designerRef.current) return;
     try {
-      checkTemplate(template);
+      checkTemplate(aiTemplate);
     } catch (e) {
       setError(`AI generated an invalid template: ${(e as Error).message}`);
       return;
     }
-    designerRef.current.updateTemplate(template);
+    const t = designerRef.current.getTemplate();
+    const pageIndex = designerRef.current.getPageCursor();
+    const aiFields = aiTemplate.schemas.flat();
+    const schemas = t.schemas.map((page, i) =>
+      i === pageIndex ? [...page, ...aiFields] : page
+    );
+    designerRef.current.updateTemplate({ ...t, schemas });
+    setTemplateVersion(v => v + 1);
     setAiOpen(false);
   };
 
@@ -864,7 +908,11 @@ export default function TemplateDesigner() {
 
       {/* AI form builder panel */}
       {aiOpen && (
-        <AskAiPanel onClose={() => setAiOpen(false)} onTemplateReady={handleAiTemplateReady} />
+        <AskAiPanel
+          onClose={() => setAiOpen(false)}
+          onTemplateReady={handleAiTemplateReady}
+          occupiedRegions={getAiOccupiedRegions()}
+        />
       )}
 
       {/* Header & Footer editor */}

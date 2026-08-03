@@ -14,6 +14,13 @@ export interface AiChatMessage {
   content: string;
 }
 
+export interface AiOccupiedRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface AiFormChatResponse {
   done: boolean;
   message: string;
@@ -118,11 +125,14 @@ export const api = {
     return new Uint8Array(buf);
   },
 
-  aiFormChat: (messages: AiChatMessage[]) =>
+  aiFormChat: (messages: AiChatMessage[], occupiedRegions?: AiOccupiedRegion[]) =>
     request<AiFormChatResponse>("/ai-form/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages }),
+      body: JSON.stringify({
+        messages,
+        ...(occupiedRegions && occupiedRegions.length > 0 ? { occupiedRegions } : {}),
+      }),
     }),
 
   aiDetectFieldsFromPdf: (images: string[]) =>

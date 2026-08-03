@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { runAiFormChat, type ChatMessage } from '../services/aiFormService.js';
+import { runAiFormChat, type ChatMessage, type OccupiedRegion } from '../services/aiFormService.js';
 
 export const aiFormRouter = Router();
 
@@ -28,6 +28,21 @@ export const aiFormRouter = Router();
  *                       enum: [user, assistant]
  *                     content:
  *                       type: string
+ *               occupiedRegions:
+ *                 type: array
+ *                 description: Regions on page 1 (mm) the AI should avoid overlapping, e.g. a letterhead's existing fields.
+ *                 items:
+ *                   type: object
+ *                   required: [x, y, width, height]
+ *                   properties:
+ *                     x:
+ *                       type: number
+ *                     y:
+ *                       type: number
+ *                     width:
+ *                       type: number
+ *                     height:
+ *                       type: number
  *     responses:
  *       200:
  *         description: Either a clarifying question or the finished template
@@ -49,16 +64,39 @@ export const aiFormRouter = Router();
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
+function isValidOccupiedRegion(r: unknown): r is OccupiedRegion {
+  return (
+    !!r &&
+    typeof r === 'object' &&
+    typeof (r as OccupiedRegion).x === 'number' &&
+    typeof (r as OccupiedRegion).y === 'number' &&
+    typeof (r as OccupiedRegion).width === 'number' &&
+    typeof (r as OccupiedRegion).height === 'number'
+  );
+}
+
 aiFormRouter.post('/chat', async (req: Request, res: Response) => {
-  const { messages } = req.body as { messages?: ChatMessage[] };
+  const { messages, occupiedRegions } = req.body as {
+    messages?: ChatMessage[];
+    occupiedRegions?: unknown;
+  };
 
   if (!Array.isArray(messages) || messages.length === 0) {
     res.status(400).json({ error: 'messages is required and must be a non-empty array' });
     return;
   }
 
+  let validatedRegions: OccupiedRegion[] | undefined;
+  if (occupiedRegions !== undefined) {
+    if (!Array.isArray(occupiedRegions) || !occupiedRegions.every(isValidOccupiedRegion)) {
+      res.status(400).json({ error: 'occupiedRegions must be an array of { x, y, width, height } numbers' });
+      return;
+    }
+    validatedRegions = occupiedRegions;
+  }
+
   try {
-    const result = await runAiFormChat(messages);
+    const result = await runAiFormChat(messages, validatedRegions);
     res.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected server error';
