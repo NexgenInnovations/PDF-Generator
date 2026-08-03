@@ -52,3 +52,22 @@ export interface LetterheadRecord extends LetterheadSummary {
   static_schema: unknown[] | null;
   base_pdf: string | null;
 }
+
+export interface SignatureEventRecord {
+  id: string;
+  submission_id: string;
+  field_name: string;
+  signer_name: string;
+  signer_email: string;
+  signed_at: string;
+  ip_address: string | null;
+  document_hash: string;
+}
+
+export interface SubmissionRecord {
+  id: string;
+  template_id: string;
+  template_version: number;
+  submitted_at: string;
+  signatureEvents: SignatureEventRecord[];
+}

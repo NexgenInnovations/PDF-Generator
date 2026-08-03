@@ -7,8 +7,16 @@ import { ArrowLeft, Download, FileCheck, Loader2, AlertCircle } from 'lucide-rea
 import { api } from '../lib/api.js';
 import { getFonts, getPlugins } from '../lib/pdfme.js';
 import type { PublishedVersionRef } from '../lib/api.js';
+import SignerDetailsPanel from '../components/SignerDetailsPanel.js';
 
 type PageState = 'filling' | 'preview';
+
+function getSignatureFields(template: Template): { name: string }[] {
+  return template.schemas
+    .flat()
+    .filter(schema => schema.type === 'signature')
+    .map(schema => ({ name: schema.name }));
+}
 
 export default function FormFill() {
   const { id } = useParams<{ id: string }>();
@@ -21,6 +29,7 @@ export default function FormFill() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [signerDetails, setSignerDetails] = useState<Record<string, { name: string; email: string }>>({});
 
   const versionParam = searchParams.get('version');
   const tagParam = searchParams.get('tag');
@@ -43,6 +52,18 @@ export default function FormFill() {
   }, [id, versionParam, tagParam]);
 
   useEffect(() => {
+    if (!templateRecord) return;
+    const fields = getSignatureFields(templateRecord.schema);
+    setSignerDetails(prev => {
+      const next: Record<string, { name: string; email: string }> = {};
+      for (const f of fields) {
+        next[f.name] = prev[f.name] ?? { name: '', email: '' };
+      }
+      return next;
+    });
+  }, [templateRecord]);
+
+  useEffect(() => {
     if (!templateRecord || !containerRef.current) return;
     uiRef.current?.destroy();
     uiRef.current = null;
@@ -62,12 +83,30 @@ export default function FormFill() {
     };
   }, [templateRecord]);
 
+  const signatureFields = templateRecord ? getSignatureFields(templateRecord.schema) : [];
+  const allSignerDetailsFilled = signatureFields.every(
+    f => signerDetails[f.name]?.name.trim() && signerDetails[f.name]?.email.trim()
+  );
+
   const handleSubmit = async () => {
     if (!uiRef.current || !templateRecord || !id) return;
     setSubmitting(true);
     setError(null);
     try {
       const inputs = (uiRef.current as Form).getInputs();
+
+      if (!allSignerDetailsFilled) {
+        setError('Please fill in the signer details for every signature field before submitting.');
+        setSubmitting(false);
+        return;
+      }
+
+      const signatureEvents = signatureFields.map(f => ({
+        fieldName: f.name,
+        signerName: signerDetails[f.name].name.trim(),
+        signerEmail: signerDetails[f.name].email.trim(),
+      }));
+
       const template = templateRecord.schema;
       const pdfBytes = await generate({ template, inputs, options: { font: getFonts() }, plugins: getPlugins() });
       const blob = new Blob([pdfBytes.buffer], { type: 'application/pdf' });
@@ -79,7 +118,7 @@ export default function FormFill() {
         uiRef.current = new Viewer({ domContainer: containerRef.current, template, inputs, options: { font: getFonts(), lang: 'en' }, plugins: getPlugins() });
       }
       setPageState('preview');
-      await api.createFilledPdf(id, inputs, versionRef);
+      await api.createFilledPdf(id, inputs, versionRef, signatureEvents);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -150,7 +189,7 @@ export default function FormFill() {
         {pageState === 'filling' && (
           <button
             onClick={handleSubmit}
-            disabled={submitting}
+            disabled={submitting || !allSignerDetailsFilled}
             className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-black hover:bg-black/80 disabled:opacity-50 transition-all active:scale-[0.97]"
             style={{ borderRadius: 50 }}
           >
@@ -171,6 +210,21 @@ export default function FormFill() {
           </button>
         )}
       </div>
+
+      {pageState === 'filling' && signatureFields.length > 0 && (
+        <div style={{ padding: '12px 16px', background: '#f7f7f5', borderBottom: '1px solid #e6e6e6' }}>
+          {signatureFields.map(f => (
+            <SignerDetailsPanel
+              key={f.name}
+              fieldLabel={f.name}
+              name={signerDetails[f.name]?.name ?? ''}
+              email={signerDetails[f.name]?.email ?? ''}
+              onNameChange={value => setSignerDetails(prev => ({ ...prev, [f.name]: { ...prev[f.name], name: value } }))}
+              onEmailChange={value => setSignerDetails(prev => ({ ...prev, [f.name]: { ...prev[f.name], email: value } }))}
+            />
+          ))}
+        </div>
+      )}
 
       <div ref={containerRef} className="flex-1 overflow-hidden" />
     </div>

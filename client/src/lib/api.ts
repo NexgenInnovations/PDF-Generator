@@ -5,6 +5,7 @@ import type {
   AssetRecord,
   LetterheadSummary,
   LetterheadRecord,
+  SubmissionRecord,
 } from "../types.js";
 import type { Template } from "@pdfme/common";
 
@@ -95,7 +96,8 @@ export const api = {
   createFilledPdf: async (
     template_id: string,
     inputs: Record<string, string>[],
-    versionRef?: PublishedVersionRef
+    versionRef?: PublishedVersionRef,
+    signatureEvents?: { fieldName: string; signerName: string; signerEmail: string }[]
   ) => {
     const res = await fetch(API_BASE + "/generate-pdf", {
       method: "POST",
@@ -105,6 +107,7 @@ export const api = {
         inputs,
         ...(versionRef && "version" in versionRef ? { version: versionRef.version } : {}),
         ...(versionRef && "tag" in versionRef ? { tag: versionRef.tag } : {}),
+        ...(signatureEvents && signatureEvents.length > 0 ? { signatureEvents } : {}),
       }),
     });
     if (!res.ok) {
@@ -174,4 +177,6 @@ export const api = {
     }),
 
   deleteLetterhead: (id: string) => request<void>(`/letterheads/${id}`, { method: "DELETE" }),
+
+  listSubmissions: (templateId: string) => request<SubmissionRecord[]>(`/templates/${templateId}/submissions`),
 };
