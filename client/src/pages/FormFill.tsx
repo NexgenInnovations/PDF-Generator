@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Form, Viewer } from '@pdfme/ui';
 import { getInputFromTemplate, type Template } from '@pdfme/common';
-import { ArrowLeft, Download, FileCheck, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Download, FileCheck, Loader2, AlertCircle, PenLine, X } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { getFonts, getPlugins } from '../lib/pdfme.js';
 import type { PublishedVersionRef } from '../lib/api.js';
@@ -17,6 +17,14 @@ function getSignatureFields(template: Template): { name: string }[] {
     .map(schema => ({ name: schema.name }));
 }
 
+function getPageSizeMm(template: Template, _pageIndex: number): { width: number; height: number } {
+  const basePdf = template.basePdf;
+  if (typeof basePdf === 'object' && 'width' in basePdf && 'height' in basePdf) {
+    return { width: basePdf.width, height: basePdf.height };
+  }
+  return { width: 210, height: 297 }; // A4 fallback for custom-PDF basePdf with no explicit dimensions
+}
+
 export default function FormFill() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
@@ -29,6 +37,8 @@ export default function FormFill() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signerDetails, setSignerDetails] = useState<Record<string, { name: string; email: string }>>({});
+  const [placementMode, setPlacementMode] = useState(false);
+  const [signAnywhereFieldName, setSignAnywhereFieldName] = useState<string | null>(null);
 
   const versionParam = searchParams.get('version');
   const tagParam = searchParams.get('tag');
@@ -115,8 +125,47 @@ export default function FormFill() {
         signerEmail: signerDetails[f.name].email.trim(),
       }));
 
+      let signAnywherePayload: { page: number; x: number; y: number; content: string; signerName: string; signerEmail: string } | undefined;
+      if (signAnywhereFieldName) {
+        const content = inputs[0]?.[signAnywhereFieldName];
+        if (typeof content !== 'string' || content.trim().length === 0) {
+          setError('Please draw your signature in the field you placed before submitting.');
+          setSubmitting(false);
+          return;
+        }
+        const currentTemplate = (uiRef.current as Form).getTemplate();
+        let foundPage = -1;
+        let foundSchema: { position: { x: number; y: number } } | undefined;
+        currentTemplate.schemas.forEach((page, pageIndex) => {
+          const match = page.find(schema => schema.name === signAnywhereFieldName);
+          if (match) {
+            foundPage = pageIndex;
+            foundSchema = match;
+          }
+        });
+        if (foundPage === -1 || !foundSchema) {
+          setError('The placed signature could not be found. Please remove and re-place it.');
+          setSubmitting(false);
+          return;
+        }
+        const details = signerDetails[signAnywhereFieldName];
+        if (!details?.name.trim() || !details?.email.trim()) {
+          setError('Please fill in the signer details for the signature you placed before submitting.');
+          setSubmitting(false);
+          return;
+        }
+        signAnywherePayload = {
+          page: foundPage,
+          x: foundSchema.position.x,
+          y: foundSchema.position.y,
+          content,
+          signerName: details.name.trim(),
+          signerEmail: details.email.trim(),
+        };
+      }
+
       const template = templateRecord.schema;
-      const pdfBytes = await api.createFilledPdf(id, inputs, versionRef, signatureEvents);
+      const pdfBytes = await api.createFilledPdf(id, inputs, versionRef, signatureEvents, signAnywherePayload);
       const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       setPdfUrl(url);
@@ -139,6 +188,51 @@ export default function FormFill() {
     a.href = pdfUrl;
     a.download = `${templateRecord.name}.pdf`;
     a.click();
+  };
+
+  const handlePlacementClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!placementMode || !uiRef.current || !templateRecord || !containerRef.current) return;
+
+    const pageEls = containerRef.current.querySelectorAll<HTMLElement>('div[style*="background-image"]');
+    let targetPageIndex = -1;
+    let pageRect: DOMRect | null = null;
+    for (let i = 0; i < pageEls.length; i++) {
+      const rect = pageEls[i].getBoundingClientRect();
+      if (event.clientY >= rect.top && event.clientY <= rect.bottom && event.clientX >= rect.left && event.clientX <= rect.right) {
+        targetPageIndex = i;
+        pageRect = rect;
+        break;
+      }
+    }
+    if (targetPageIndex === -1 || !pageRect) return;
+
+    const { width: pageWidthMm, height: pageHeightMm } = getPageSizeMm(templateRecord.schema, targetPageIndex);
+    const pxPerMm = pageRect.width / pageWidthMm;
+    const rawMmX = (event.clientX - pageRect.left) / pxPerMm;
+    const rawMmY = (event.clientY - pageRect.top) / pxPerMm;
+    const SIGN_ANYWHERE_WIDTH_MM = 62.5;
+    const SIGN_ANYWHERE_HEIGHT_MM = 37.5;
+    const mmX = Math.min(Math.max(rawMmX, 0), Math.max(0, pageWidthMm - SIGN_ANYWHERE_WIDTH_MM));
+    const mmY = Math.min(Math.max(rawMmY, 0), Math.max(0, pageHeightMm - SIGN_ANYWHERE_HEIGHT_MM));
+
+    const fieldName = `sign_anywhere_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+    const t = uiRef.current.getTemplate();
+    const schemas = t.schemas.map((page, i) =>
+      i === targetPageIndex
+        ? [...page, { name: fieldName, type: 'signature', content: '', position: { x: mmX, y: mmY }, width: SIGN_ANYWHERE_WIDTH_MM, height: SIGN_ANYWHERE_HEIGHT_MM }]
+        : page
+    );
+    uiRef.current.updateTemplate({ ...t, schemas });
+    setSignAnywhereFieldName(fieldName);
+    setPlacementMode(false);
+  };
+
+  const handleRemoveSignAnywhere = () => {
+    if (!uiRef.current || !signAnywhereFieldName) return;
+    const t = uiRef.current.getTemplate();
+    const schemas = t.schemas.map(page => page.filter(schema => schema.name !== signAnywhereFieldName));
+    uiRef.current.updateTemplate({ ...t, schemas });
+    setSignAnywhereFieldName(null);
   };
 
   return (
@@ -195,6 +289,33 @@ export default function FormFill() {
 
         {pageState === 'filling' && (
           <button
+            onClick={() => {
+              if (signAnywhereFieldName) {
+                handleRemoveSignAnywhere();
+              } else {
+                setPlacementMode(prev => !prev);
+              }
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-all"
+            style={{
+              borderRadius: 50,
+              border: '1px solid #e6e6e6',
+              background: placementMode ? '#000' : 'transparent',
+              color: placementMode ? '#fff' : 'rgba(0,0,0,0.55)',
+            }}
+          >
+            {signAnywhereFieldName ? (
+              <><X className="h-3.5 w-3.5" />Remove Signature</>
+            ) : placementMode ? (
+              <><PenLine className="h-3.5 w-3.5" />Click page to sign…</>
+            ) : (
+              <><PenLine className="h-3.5 w-3.5" />Sign Document</>
+            )}
+          </button>
+        )}
+
+        {pageState === 'filling' && (
+          <button
             onClick={handleSubmit}
             disabled={submitting || !allSignerDetailsFilled}
             className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-black hover:bg-black/80 disabled:opacity-50 transition-all active:scale-[0.97]"
@@ -218,7 +339,7 @@ export default function FormFill() {
         )}
       </div>
 
-      {pageState === 'filling' && signatureFields.length > 0 && (
+      {pageState === 'filling' && (signatureFields.length > 0 || signAnywhereFieldName) && (
         <div style={{ padding: '12px 16px', background: '#f7f7f5', borderBottom: '1px solid #e6e6e6' }}>
           {signatureFields.map(f => (
             <SignerDetailsPanel
@@ -230,10 +351,31 @@ export default function FormFill() {
               onEmailChange={value => setSignerDetails(prev => ({ ...prev, [f.name]: { ...prev[f.name], email: value } }))}
             />
           ))}
+          {signAnywhereFieldName && (
+            <SignerDetailsPanel
+              key={signAnywhereFieldName}
+              fieldLabel={signAnywhereFieldName}
+              name={signerDetails[signAnywhereFieldName]?.name ?? ''}
+              email={signerDetails[signAnywhereFieldName]?.email ?? ''}
+              onNameChange={value => setSignerDetails(prev => ({ ...prev, [signAnywhereFieldName]: { ...prev[signAnywhereFieldName], name: value } }))}
+              onEmailChange={value => setSignerDetails(prev => ({ ...prev, [signAnywhereFieldName]: { ...prev[signAnywhereFieldName], email: value } }))}
+            />
+          )}
         </div>
       )}
 
-      <div ref={containerRef} className="flex-1 overflow-hidden" />
+      <div className="flex-1 overflow-hidden relative">
+        <div ref={containerRef} className="h-full w-full overflow-auto" />
+        {placementMode && (
+          <div
+            onClick={handlePlacementClick}
+            style={{
+              position: 'absolute', inset: 0, cursor: 'crosshair',
+              background: 'rgba(0,0,0,0.03)', zIndex: 10,
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }

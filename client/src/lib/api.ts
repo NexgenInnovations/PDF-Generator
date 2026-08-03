@@ -104,7 +104,8 @@ export const api = {
     template_id: string,
     inputs: Record<string, string>[],
     versionRef?: PublishedVersionRef,
-    signatureEvents?: { fieldName: string; signerName: string; signerEmail: string }[]
+    signatureEvents?: { fieldName: string; signerName: string; signerEmail: string }[],
+    signAnywhere?: { page: number; x: number; y: number; content: string; signerName: string; signerEmail: string }
   ): Promise<Uint8Array> => {
     const res = await fetch(API_BASE + "/generate-pdf", {
       method: "POST",
@@ -115,6 +116,7 @@ export const api = {
         ...(versionRef && "version" in versionRef ? { version: versionRef.version } : {}),
         ...(versionRef && "tag" in versionRef ? { tag: versionRef.tag } : {}),
         ...(signatureEvents && signatureEvents.length > 0 ? { signatureEvents } : {}),
+        ...(signAnywhere ? { signAnywhere } : {}),
       }),
     });
     if (!res.ok) {
