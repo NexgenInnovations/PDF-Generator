@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { generatePdf } from '../services/pdfService.js';
 import { getTemplate, getPublishedVersion, getLatestPublishedVersion, createFilledSubmission, createGeneratedPdf, createSignatureEvent } from '../db.js';
 import type { Template } from '@pdfme/common';
@@ -76,12 +76,13 @@ export const generatePdfRouter = Router();
  *               $ref: '#/components/schemas/Error'
  */
 generatePdfRouter.post('/', async (req: Request, res: Response) => {
-  const { template_id, inputs, version, tag, signatureEvents } = req.body as {
+  const { template_id, inputs, version, tag, signatureEvents, signAnywhere } = req.body as {
     template_id?: string;
     inputs?: Record<string, string>[];
     version?: number;
     tag?: string;
     signatureEvents?: { fieldName?: string; signerName?: string; signerEmail?: string }[];
+    signAnywhere?: { page?: number; x?: number; y?: number; content?: string; signerName?: string; signerEmail?: string };
   };
 
   if (!template_id || !Array.isArray(inputs) || inputs.length === 0) {
@@ -113,6 +114,29 @@ generatePdfRouter.post('/', async (req: Request, res: Response) => {
     }
   }
 
+  let validatedSignAnywhere: { page: number; x: number; y: number; content: string; signerName: string; signerEmail: string } | undefined;
+  if (signAnywhere !== undefined) {
+    if (
+      typeof signAnywhere.page !== 'number' || !Number.isInteger(signAnywhere.page) || signAnywhere.page < 0 ||
+      typeof signAnywhere.x !== 'number' || !Number.isFinite(signAnywhere.x) ||
+      typeof signAnywhere.y !== 'number' || !Number.isFinite(signAnywhere.y) ||
+      typeof signAnywhere.content !== 'string' || signAnywhere.content.trim().length === 0 ||
+      typeof signAnywhere.signerName !== 'string' || signAnywhere.signerName.trim().length === 0 ||
+      typeof signAnywhere.signerEmail !== 'string' || signAnywhere.signerEmail.trim().length === 0
+    ) {
+      res.status(400).json({ error: 'signAnywhere requires a non-negative integer page, finite x/y, and non-empty content, signerName, signerEmail' });
+      return;
+    }
+    validatedSignAnywhere = {
+      page: signAnywhere.page,
+      x: signAnywhere.x,
+      y: signAnywhere.y,
+      content: signAnywhere.content,
+      signerName: signAnywhere.signerName.trim(),
+      signerEmail: signAnywhere.signerEmail.trim(),
+    };
+  }
+
   try {
     const record = await getTemplate(template_id);
     if (!record) {
@@ -131,7 +155,37 @@ generatePdfRouter.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const pdf = await generatePdf(resolvedVersion.schema as Template, inputs);
+    let templateForGeneration = resolvedVersion.schema as Template;
+    let signAnywhereFieldName: string | undefined;
+
+    if (validatedSignAnywhere) {
+      if (validatedSignAnywhere.page >= templateForGeneration.schemas.length) {
+        res.status(400).json({ error: `signAnywhere.page ${validatedSignAnywhere.page} is out of range for this template's ${templateForGeneration.schemas.length} page(s)` });
+        return;
+      }
+
+      const basePdf = templateForGeneration.basePdf;
+      const pageWidthMm = typeof basePdf === 'object' && 'width' in basePdf ? basePdf.width : 210;
+      const pageHeightMm = typeof basePdf === 'object' && 'height' in basePdf ? basePdf.height : 297;
+      const SIGN_ANYWHERE_WIDTH_MM = 62.5;
+      const SIGN_ANYWHERE_HEIGHT_MM = 37.5;
+      const clampedX = Math.min(Math.max(validatedSignAnywhere.x, 0), Math.max(0, pageWidthMm - SIGN_ANYWHERE_WIDTH_MM));
+      const clampedY = Math.min(Math.max(validatedSignAnywhere.y, 0), Math.max(0, pageHeightMm - SIGN_ANYWHERE_HEIGHT_MM));
+
+      signAnywhereFieldName = `sign_anywhere_${randomUUID()}`;
+      const clonedTemplate: Template = JSON.parse(JSON.stringify(templateForGeneration));
+      clonedTemplate.schemas[validatedSignAnywhere.page].push({
+        name: signAnywhereFieldName,
+        type: 'signature',
+        content: validatedSignAnywhere.content,
+        position: { x: clampedX, y: clampedY },
+        width: SIGN_ANYWHERE_WIDTH_MM,
+        height: SIGN_ANYWHERE_HEIGHT_MM,
+      });
+      templateForGeneration = clonedTemplate;
+    }
+
+    const pdf = await generatePdf(templateForGeneration, inputs);
 
     try {
       const submission = await createFilledSubmission(
@@ -149,10 +203,17 @@ generatePdfRouter.post('/', async (req: Request, res: Response) => {
         fileSizeBytes: pdf.length,
       });
 
-      if (validatedSignatureEvents.length > 0) {
+      const allSignatureEvents = [
+        ...validatedSignatureEvents,
+        ...(validatedSignAnywhere && signAnywhereFieldName
+          ? [{ fieldName: signAnywhereFieldName, signerName: validatedSignAnywhere.signerName, signerEmail: validatedSignAnywhere.signerEmail }]
+          : []),
+      ];
+
+      if (allSignatureEvents.length > 0) {
         const documentHash = createHash('sha256').update(pdf).digest('hex');
         const ipAddress = req.ip ?? null;
-        for (const event of validatedSignatureEvents) {
+        for (const event of allSignatureEvents) {
           await createSignatureEvent({
             submissionId: submission.id,
             fieldName: event.fieldName,
