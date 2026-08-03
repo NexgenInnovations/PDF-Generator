@@ -59,28 +59,32 @@ function ToolbarBtn({
     <button
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-[7px] transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
       style={accent ? {
-        background: '#000',
+        background: '#111',
         color: '#fff',
-        borderRadius: 50,
         border: 'none',
       } : {
         background: 'transparent',
-        color: 'rgba(0,0,0,0.55)',
-        borderRadius: 50,
-        border: '1px solid #e6e6e6',
+        color: '#555',
+        border: 'none',
       }}
       onMouseEnter={e => {
         if (!accent) {
-          (e.currentTarget as HTMLButtonElement).style.background = '#f7f7f5';
-          (e.currentTarget as HTMLButtonElement).style.color = '#000';
+          (e.currentTarget as HTMLButtonElement).style.background = '#fff';
+          (e.currentTarget as HTMLButtonElement).style.color = '#111';
+          (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 1px 2px rgba(0,0,0,0.08)';
+        } else {
+          (e.currentTarget as HTMLButtonElement).style.background = '#000';
         }
       }}
       onMouseLeave={e => {
         if (!accent) {
           (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-          (e.currentTarget as HTMLButtonElement).style.color = 'rgba(0,0,0,0.55)';
+          (e.currentTarget as HTMLButtonElement).style.color = '#555';
+          (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none';
+        } else {
+          (e.currentTarget as HTMLButtonElement).style.background = '#111';
         }
       }}
     >
@@ -90,24 +94,28 @@ function ToolbarBtn({
   );
 }
 
-function Sep() {
-  return <div style={{ width: 1, height: 20, background: '#e6e6e6', flexShrink: 0 }} />;
-}
-
 function Group({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
       <span style={{
-        fontSize: 9,
-        fontWeight: 400,
-        letterSpacing: '0.10em',
-        color: 'rgba(0,0,0,0.35)',
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: '0.07em',
+        color: '#a3a3a0',
         textTransform: 'uppercase',
-        fontFamily: "'Geist Mono', monospace",
+        paddingLeft: 2,
       }}>
         {label}
       </span>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <div style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 2,
+        background: '#f7f7f5',
+        border: '1px solid #ececea',
+        borderRadius: 10,
+        padding: 3,
+      }}>
         {children}
       </div>
     </div>
@@ -706,9 +714,35 @@ export default function TemplateDesigner() {
         </button>
       </div>
 
-      {/* Row 2 — action toolbar */}
+      {/* Row 2 — primary actions */}
       <div
-        className="flex items-end gap-4 px-4 py-2"
+        className="flex items-end gap-4 px-4 py-2.5"
+        style={{ ...barStyle }}
+      >
+        <Group label="Project">
+          <ToolbarBtn icon={<Save size={13} />} label="Save Draft" onClick={handleSave} accent />
+          <ToolbarBtn icon={<Copy size={13} />} label="Save As" onClick={handleSaveAs} />
+          <ToolbarBtn icon={<RotateCcw size={13} />} label="Reset" onClick={handleReset} />
+          <ToolbarBtn icon={<UploadCloud size={13} />} label="Publish" onClick={() => void handleOpenPublish()} disabled={!id} />
+        </Group>
+
+        <div className="flex-1" />
+
+        <Group label="Output">
+          <ToolbarBtn icon={<FileDown size={13} />} label="Template JSON" onClick={handleDownloadTemplateJson} />
+          <ToolbarBtn
+            icon={generating ? <Loader2 size={13} className="animate-spin" /> : <Printer size={13} />}
+            label={generating ? 'Generating…' : 'Generate PDF'}
+            onClick={handleGeneratePdf}
+            disabled={generating}
+          />
+          <ToolbarBtn icon={<Code size={13} />} label="API" onClick={() => setApiPayloadOpen(true)} />
+        </Group>
+      </div>
+
+      {/* Row 3 — content / setup tools */}
+      <div
+        className="flex items-end gap-4 px-4 py-2.5"
         style={{ ...barStyle }}
       >
         <Group label="Page">
@@ -716,12 +750,11 @@ export default function TemplateDesigner() {
             value={currentSizeName ?? ''}
             disabled={!isBlank}
             onChange={e => handlePageSizeChange(e.target.value as PageSizeName)}
-            className="h-[26px] px-2 text-xs font-semibold disabled:opacity-40"
+            className="h-[26px] px-2 text-xs font-semibold rounded-[7px] disabled:opacity-40"
             style={{
               background: 'transparent',
-              color: 'rgba(0,0,0,0.55)',
-              borderRadius: 50,
-              border: '1px solid #e6e6e6',
+              color: '#555',
+              border: 'none',
             }}
           >
             <option value="" disabled>Size</option>
@@ -743,8 +776,6 @@ export default function TemplateDesigner() {
           />
         </Group>
 
-        <Sep />
-
         <Group label="Base PDF">
           <ToolbarBtn
             icon={<FileUp size={13} />}
@@ -754,8 +785,6 @@ export default function TemplateDesigner() {
           />
           <input ref={basePdfInputRef} type="file" accept="application/pdf" style={{ display: 'none' }} onChange={handleBasePdfFile} />
         </Group>
-
-        <Sep />
 
         <Group label="Edit">
           <ToolbarBtn icon={<Layout size={13} />} label="Static schema" onClick={handleStaticSchema} />
@@ -773,28 +802,6 @@ export default function TemplateDesigner() {
             label="Apply Letterhead"
             onClick={() => setLetterheadPickerOpen(true)}
           />
-        </Group>
-
-        <Sep />
-
-        <Group label="Project">
-          <ToolbarBtn icon={<Save size={13} />} label="Save Draft" onClick={handleSave} accent />
-          <ToolbarBtn icon={<Copy size={13} />} label="Save As" onClick={handleSaveAs} />
-          <ToolbarBtn icon={<RotateCcw size={13} />} label="Reset" onClick={handleReset} />
-          <ToolbarBtn icon={<UploadCloud size={13} />} label="Publish" onClick={() => void handleOpenPublish()} disabled={!id} />
-        </Group>
-
-        <Sep />
-
-        <Group label="Output">
-          <ToolbarBtn icon={<FileDown size={13} />} label="Template JSON" onClick={handleDownloadTemplateJson} />
-          <ToolbarBtn
-            icon={generating ? <Loader2 size={13} className="animate-spin" /> : <Printer size={13} />}
-            label={generating ? 'Generating…' : 'Generate PDF'}
-            onClick={handleGeneratePdf}
-            disabled={generating}
-          />
-          <ToolbarBtn icon={<Code size={13} />} label="API" onClick={() => setApiPayloadOpen(true)} />
         </Group>
       </div>
 
