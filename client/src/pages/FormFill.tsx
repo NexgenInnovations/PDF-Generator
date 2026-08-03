@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Form, Viewer } from '@pdfme/ui';
-import { generate } from '@pdfme/generator';
 import { getInputFromTemplate, type Template } from '@pdfme/common';
 import { ArrowLeft, Download, FileCheck, Loader2, AlertCircle } from 'lucide-react';
 import { api } from '../lib/api.js';
@@ -101,6 +100,15 @@ export default function FormFill() {
         return;
       }
 
+      const allSignaturesDrawn = signatureFields.every(
+        f => typeof inputs[0]?.[f.name] === 'string' && inputs[0][f.name].trim().length > 0
+      );
+      if (!allSignaturesDrawn) {
+        setError('Please draw your signature in every signature field before submitting.');
+        setSubmitting(false);
+        return;
+      }
+
       const signatureEvents = signatureFields.map(f => ({
         fieldName: f.name,
         signerName: signerDetails[f.name].name.trim(),
@@ -108,8 +116,8 @@ export default function FormFill() {
       }));
 
       const template = templateRecord.schema;
-      const pdfBytes = await generate({ template, inputs, options: { font: getFonts() }, plugins: getPlugins() });
-      const blob = new Blob([pdfBytes.buffer], { type: 'application/pdf' });
+      const pdfBytes = await api.createFilledPdf(id, inputs, versionRef, signatureEvents);
+      const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       setPdfUrl(url);
       uiRef.current.destroy();
@@ -118,7 +126,6 @@ export default function FormFill() {
         uiRef.current = new Viewer({ domContainer: containerRef.current, template, inputs, options: { font: getFonts(), lang: 'en' }, plugins: getPlugins() });
       }
       setPageState('preview');
-      await api.createFilledPdf(id, inputs, versionRef, signatureEvents);
     } catch (e) {
       setError((e as Error).message);
     } finally {

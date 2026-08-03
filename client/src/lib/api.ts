@@ -98,7 +98,7 @@ export const api = {
     inputs: Record<string, string>[],
     versionRef?: PublishedVersionRef,
     signatureEvents?: { fieldName: string; signerName: string; signerEmail: string }[]
-  ) => {
+  ): Promise<Uint8Array> => {
     const res = await fetch(API_BASE + "/generate-pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -114,6 +114,8 @@ export const api = {
       const text = await res.text();
       throw new Error(`${res.status} ${text}`);
     }
+    const buf = await res.arrayBuffer();
+    return new Uint8Array(buf);
   },
 
   aiFormChat: (messages: AiChatMessage[]) =>

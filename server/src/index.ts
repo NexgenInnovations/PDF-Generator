@@ -14,6 +14,12 @@ import { initDb } from './db.js';
 await initDb();
 
 const app = express();
+// Trust the reverse proxy so req.ip reflects the signer's actual IP address
+// (used for evidentiary purposes in signature_events.ip_address) rather than
+// the proxy's own address. No proxy-specific topology (hop count, trusted
+// subnet) is configured anywhere else in this codebase, so `true` is the
+// simplest correct default for this app's likely single-reverse-proxy setup.
+app.set('trust proxy', true);
 app.use(cors());
 
 // This route needs a larger body limit (base64 page images) than the rest

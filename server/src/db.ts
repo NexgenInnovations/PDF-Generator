@@ -202,7 +202,7 @@ async function ensureTables(): Promise<void> {
     IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'signature_events')
     CREATE TABLE signature_events (
       id              UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-      submission_id   UNIQUEIDENTIFIER NOT NULL REFERENCES filled_submissions(id) ON DELETE CASCADE,
+      submission_id   UNIQUEIDENTIFIER NOT NULL REFERENCES filled_submissions(id),
       field_name      NVARCHAR(255)    NOT NULL,
       signer_name     NVARCHAR(255)    NOT NULL,
       signer_email    NVARCHAR(320)    NOT NULL,
