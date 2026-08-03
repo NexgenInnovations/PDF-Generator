@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Form, Viewer } from '@pdfme/ui';
-import { getInputFromTemplate, type Template } from '@pdfme/common';
+import { getInputFromTemplate, isBlankPdf, type Template } from '@pdfme/common';
+import { pdf2size } from '@pdfme/converter';
 import { ArrowLeft, Download, FileCheck, Loader2, AlertCircle, PenLine, X } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { getFonts, getPlugins } from '../lib/pdfme.js';
@@ -17,12 +18,19 @@ function getSignatureFields(template: Template): { name: string }[] {
     .map(schema => ({ name: schema.name }));
 }
 
-function getPageSizeMm(template: Template, _pageIndex: number): { width: number; height: number } {
+function getPageSizeMm(
+  template: Template,
+  pageIndex: number,
+  customPdfPageSizes: { width: number; height: number }[] | null
+): { width: number; height: number } {
   const basePdf = template.basePdf;
-  if (typeof basePdf === 'object' && 'width' in basePdf && 'height' in basePdf) {
+  if (isBlankPdf(basePdf)) {
     return { width: basePdf.width, height: basePdf.height };
   }
-  return { width: 210, height: 297 }; // A4 fallback for custom-PDF basePdf with no explicit dimensions
+  if (customPdfPageSizes && customPdfPageSizes[pageIndex]) {
+    return customPdfPageSizes[pageIndex];
+  }
+  return { width: 210, height: 297 }; // A4 fallback while real custom-PDF page sizes are still loading (or failed to load)
 }
 
 export default function FormFill() {
@@ -39,6 +47,8 @@ export default function FormFill() {
   const [signerDetails, setSignerDetails] = useState<Record<string, { name: string; email: string }>>({});
   const [placementMode, setPlacementMode] = useState(false);
   const [signAnywhereFieldName, setSignAnywhereFieldName] = useState<string | null>(null);
+  const [customPdfPageSizes, setCustomPdfPageSizes] = useState<{ width: number; height: number }[] | null>(null);
+  const [loadingPageSizes, setLoadingPageSizes] = useState(false);
 
   const versionParam = searchParams.get('version');
   const tagParam = searchParams.get('tag');
@@ -51,10 +61,27 @@ export default function FormFill() {
   useEffect(() => {
     if (!id) return;
     api.getTemplate(id, versionRef)
-      .then((record) => {
+      .then(async (record) => {
         const schema = record.latestPublished?.schema;
         if (!schema) { setError('No published version available for this template.'); return; }
-        setTemplateRecord({ name: record.name, schema: schema as Template });
+        const template = schema as Template;
+        setTemplateRecord({ name: record.name, schema: template });
+
+        setCustomPdfPageSizes(null);
+        const basePdf = template.basePdf;
+        if (!isBlankPdf(basePdf) && typeof basePdf === 'string') {
+          setLoadingPageSizes(true);
+          try {
+            const base64Payload = basePdf.split(',')[1] ?? basePdf;
+            const bytes = Uint8Array.from(atob(base64Payload), c => c.charCodeAt(0));
+            const sizes = await pdf2size(bytes);
+            setCustomPdfPageSizes(sizes);
+          } catch (e) {
+            console.error('Failed to determine custom PDF page sizes, falling back to A4:', e);
+          } finally {
+            setLoadingPageSizes(false);
+          }
+        }
       })
       .catch((e: Error) => setError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -74,6 +101,8 @@ export default function FormFill() {
 
   useEffect(() => {
     if (!templateRecord || !containerRef.current) return;
+    setSignAnywhereFieldName(null);
+    setPlacementMode(false);
     uiRef.current?.destroy();
     uiRef.current = null;
     const template = templateRecord.schema;
@@ -93,9 +122,12 @@ export default function FormFill() {
   }, [templateRecord]);
 
   const signatureFields = templateRecord ? getSignatureFields(templateRecord.schema) : [];
-  const allSignerDetailsFilled = signatureFields.every(
-    f => signerDetails[f.name]?.name.trim() && signerDetails[f.name]?.email.trim()
-  );
+  const allSignerDetailsFilled =
+    signatureFields.every(
+      f => signerDetails[f.name]?.name.trim() && signerDetails[f.name]?.email.trim()
+    ) &&
+    (!signAnywhereFieldName ||
+      Boolean(signerDetails[signAnywhereFieldName]?.name.trim() && signerDetails[signAnywhereFieldName]?.email.trim()));
 
   const handleSubmit = async () => {
     if (!uiRef.current || !templateRecord || !id) return;
@@ -206,7 +238,7 @@ export default function FormFill() {
     }
     if (targetPageIndex === -1 || !pageRect) return;
 
-    const { width: pageWidthMm, height: pageHeightMm } = getPageSizeMm(templateRecord.schema, targetPageIndex);
+    const { width: pageWidthMm, height: pageHeightMm } = getPageSizeMm(templateRecord.schema, targetPageIndex, customPdfPageSizes);
     const pxPerMm = pageRect.width / pageWidthMm;
     const rawMmX = (event.clientX - pageRect.left) / pxPerMm;
     const rawMmY = (event.clientY - pageRect.top) / pxPerMm;
@@ -296,7 +328,8 @@ export default function FormFill() {
                 setPlacementMode(prev => !prev);
               }
             }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-all"
+            disabled={!signAnywhereFieldName && loadingPageSizes}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-all disabled:opacity-50"
             style={{
               borderRadius: 50,
               border: '1px solid #e6e6e6',
@@ -306,6 +339,8 @@ export default function FormFill() {
           >
             {signAnywhereFieldName ? (
               <><X className="h-3.5 w-3.5" />Remove Signature</>
+            ) : loadingPageSizes ? (
+              <><Loader2 className="h-3.5 w-3.5 animate-spin" />Loading page info…</>
             ) : placementMode ? (
               <><PenLine className="h-3.5 w-3.5" />Click page to sign…</>
             ) : (
@@ -365,16 +400,12 @@ export default function FormFill() {
       )}
 
       <div className="flex-1 overflow-hidden relative">
-        <div ref={containerRef} className="h-full w-full overflow-auto" />
-        {placementMode && (
-          <div
-            onClick={handlePlacementClick}
-            style={{
-              position: 'absolute', inset: 0, cursor: 'crosshair',
-              background: 'rgba(0,0,0,0.03)', zIndex: 10,
-            }}
-          />
-        )}
+        <div
+          ref={containerRef}
+          className="h-full w-full overflow-auto"
+          onClickCapture={placementMode ? handlePlacementClick : undefined}
+          style={placementMode ? { cursor: 'crosshair', boxShadow: 'inset 0 0 0 2px rgba(0,0,0,0.15)' } : undefined}
+        />
       </div>
     </div>
   );

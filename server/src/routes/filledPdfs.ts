@@ -2,7 +2,8 @@ import { Router, Request, Response } from 'express';
 import { createHash, randomUUID } from 'crypto';
 import { generatePdf } from '../services/pdfService.js';
 import { getTemplate, getPublishedVersion, getLatestPublishedVersion, createFilledSubmission, createGeneratedPdf, createSignatureEvent } from '../db.js';
-import type { Template } from '@pdfme/common';
+import { isBlankPdf, type Template } from '@pdfme/common';
+import { pdf2size } from '@pdfme/converter';
 
 export const generatePdfRouter = Router();
 
@@ -165,8 +166,25 @@ generatePdfRouter.post('/', async (req: Request, res: Response) => {
       }
 
       const basePdf = templateForGeneration.basePdf;
-      const pageWidthMm = typeof basePdf === 'object' && 'width' in basePdf ? basePdf.width : 210;
-      const pageHeightMm = typeof basePdf === 'object' && 'height' in basePdf ? basePdf.height : 297;
+      let pageWidthMm = 210;
+      let pageHeightMm = 297;
+      if (isBlankPdf(basePdf)) {
+        pageWidthMm = basePdf.width;
+        pageHeightMm = basePdf.height;
+      } else if (typeof basePdf === 'string') {
+        try {
+          const base64Payload = basePdf.includes(',') ? basePdf.split(',')[1] : basePdf;
+          const buffer = Buffer.from(base64Payload, 'base64');
+          const sizes = await pdf2size(buffer);
+          const pageSize = sizes[validatedSignAnywhere.page];
+          if (pageSize) {
+            pageWidthMm = pageSize.width;
+            pageHeightMm = pageSize.height;
+          }
+        } catch (sizeErr) {
+          console.error('Failed to determine custom PDF page size, falling back to A4:', sizeErr);
+        }
+      }
       const SIGN_ANYWHERE_WIDTH_MM = 62.5;
       const SIGN_ANYWHERE_HEIGHT_MM = 37.5;
       const clampedX = Math.min(Math.max(validatedSignAnywhere.x, 0), Math.max(0, pageWidthMm - SIGN_ANYWHERE_WIDTH_MM));
