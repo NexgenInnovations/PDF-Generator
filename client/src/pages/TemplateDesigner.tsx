@@ -467,6 +467,7 @@ export default function TemplateDesigner() {
           position: { x: 20, y: 20 },
           width: 40,
           height: 40,
+          readOnly: true,
         }
       : {
           name: `image_${uniqueSuffix}`,
@@ -475,6 +476,7 @@ export default function TemplateDesigner() {
           position: { x: 20, y: 20 },
           width: 40,
           height: 40,
+          readOnly: true,
         };
     const schemas = t.schemas.map((page, i) =>
       i === pageIndex ? [...page, newField] : page

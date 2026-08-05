@@ -124,10 +124,10 @@ export default function FormFill() {
   const signatureFields = templateRecord ? getSignatureFields(templateRecord.schema) : [];
   const allSignerDetailsFilled =
     signatureFields.every(
-      f => signerDetails[f.name]?.name.trim() && signerDetails[f.name]?.email.trim()
+      f => signerDetails[f.name]?.name?.trim() && signerDetails[f.name]?.email?.trim()
     ) &&
     (!signAnywhereFieldName ||
-      Boolean(signerDetails[signAnywhereFieldName]?.name.trim() && signerDetails[signAnywhereFieldName]?.email.trim()));
+      Boolean(signerDetails[signAnywhereFieldName]?.name?.trim() && signerDetails[signAnywhereFieldName]?.email?.trim()));
 
   const handleSubmit = async () => {
     if (!uiRef.current || !templateRecord || !id) return;
@@ -181,7 +181,7 @@ export default function FormFill() {
           return;
         }
         const details = signerDetails[signAnywhereFieldName];
-        if (!details?.name.trim() || !details?.email.trim()) {
+        if (!details?.name?.trim() || !details?.email?.trim()) {
           setError('Please fill in the signer details for the signature you placed before submitting.');
           setSubmitting(false);
           return;
@@ -255,6 +255,7 @@ export default function FormFill() {
         : page
     );
     uiRef.current.updateTemplate({ ...t, schemas });
+    setSignerDetails(prev => ({ ...prev, [fieldName]: prev[fieldName] ?? { name: '', email: '' } }));
     setSignAnywhereFieldName(fieldName);
     setPlacementMode(false);
   };
