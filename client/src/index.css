@@ -62,7 +62,7 @@ html { scroll-behavior: smooth; }
 body {
   background: #ffffff;
   color: #000000;
-  font-family: 'Geist', system-ui, -apple-system, sans-serif;
+  font-family: 'Figtree', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
