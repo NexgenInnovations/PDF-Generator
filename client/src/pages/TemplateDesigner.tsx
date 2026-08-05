@@ -260,7 +260,11 @@ export default function TemplateDesigner() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const seedPrompt = (location.state as { seedPrompt?: string } | null)?.seedPrompt;
+  // Captured once on first render so that clearing it from history state below does not
+  // yank it away before AskAiPanel has mounted and sent it.
+  const [seedPrompt, setSeedPrompt] = useState<string | undefined>(
+    () => (location.state as { seedPrompt?: string } | null)?.seedPrompt,
+  );
   const containerRef = useRef<HTMLDivElement | null>(null);
   const designerRef = useRef<Designer | null>(null);
   const basePdfInputRef = useRef<HTMLInputElement | null>(null);
@@ -323,6 +327,16 @@ export default function TemplateDesigner() {
       setTimeout(() => d?.destroy(), 0);
     };
   }, [id]);
+
+  // Consume the gallery's seed prompt exactly once. The history entry is stripped straight
+  // away so a reload can't replay it, and the captured copy is dropped after the AI panel
+  // has mounted (child effects run first, so it has already auto-sent) so that manually
+  // closing and reopening the panel doesn't re-send it either.
+  useEffect(() => {
+    if (!seedPrompt) return;
+    if (location.state) navigate(location.pathname, { replace: true, state: null });
+    if (aiOpen) setSeedPrompt(undefined);
+  }, [aiOpen, seedPrompt, location.state, location.pathname, navigate]);
 
   const handleSave = async () => {
     if (!designerRef.current) return;
