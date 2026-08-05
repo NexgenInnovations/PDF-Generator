@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2, Send, Sparkles } from 'lucide-react';
 import type { Template } from '@pdfme/common';
 import { api, type AiChatMessage, type AiOccupiedRegion } from '../lib/api.js';
@@ -7,9 +7,10 @@ interface AskAiPanelProps {
   onClose: () => void;
   onTemplateReady: (template: Template) => void;
   occupiedRegions?: AiOccupiedRegion[];
+  initialPrompt?: string;
 }
 
-export default function AskAiPanel({ onClose, onTemplateReady, occupiedRegions }: AskAiPanelProps) {
+export default function AskAiPanel({ onClose, onTemplateReady, occupiedRegions, initialPrompt }: AskAiPanelProps) {
   const [messages, setMessages] = useState<AiChatMessage[]>([
     { role: 'assistant', content: "Describe the form you'd like to create — what's it for, and what fields does it need?" },
   ]);
@@ -17,9 +18,10 @@ export default function AskAiPanel({ onClose, onTemplateReady, occupiedRegions }
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const listEndRef = useRef<HTMLDivElement | null>(null);
+  const initialPromptSentRef = useRef(false);
 
-  const send = async () => {
-    const text = input.trim();
+  const send = async (overrideText?: string) => {
+    const text = (overrideText ?? input).trim();
     if (!text || sending) return;
     const next: AiChatMessage[] = [...messages, { role: 'user', content: text }];
     setMessages(next);
@@ -39,6 +41,13 @@ export default function AskAiPanel({ onClose, onTemplateReady, occupiedRegions }
       setSending(false);
     }
   };
+
+  useEffect(() => {
+    if (!initialPrompt || initialPromptSentRef.current) return;
+    initialPromptSentRef.current = true;
+    void send(initialPrompt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {

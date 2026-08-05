@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Designer } from '@pdfme/ui';
 import { generate } from '@pdfme/generator';
 import { checkTemplate, getInputFromTemplate, isBlankPdf, type Template } from '@pdfme/common';
@@ -259,6 +259,8 @@ function PublishModal({
 export default function TemplateDesigner() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const seedPrompt = (location.state as { seedPrompt?: string } | null)?.seedPrompt;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const designerRef = useRef<Designer | null>(null);
   const basePdfInputRef = useRef<HTMLInputElement | null>(null);
@@ -309,6 +311,7 @@ export default function TemplateDesigner() {
         plugins: getPlugins(),
       });
       setTemplateVersion(v => v + 1);
+      if (!id && seedPrompt) setAiOpen(true);
     };
 
     init().catch((e: Error) => setError(e.message));
@@ -914,6 +917,7 @@ export default function TemplateDesigner() {
           onClose={() => setAiOpen(false)}
           onTemplateReady={handleAiTemplateReady}
           occupiedRegions={getAiOccupiedRegions()}
+          initialPrompt={seedPrompt}
         />
       )}
 
