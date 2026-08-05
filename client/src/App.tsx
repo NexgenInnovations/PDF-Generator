@@ -5,6 +5,7 @@ import { RoleGuard } from './components/RoleGuard.js';
 const Landing = lazy(() => import('./pages/Landing.js'));
 const Dashboard = lazy(() => import('./pages/Dashboard.js'));
 const TemplateList = lazy(() => import('./pages/TemplateList.js'));
+const TemplateGallery = lazy(() => import('./pages/TemplateGallery.js'));
 const TemplateDesigner = lazy(() => import('./pages/TemplateDesigner.js'));
 const FormFill = lazy(() => import('./pages/FormFill.js'));
 const Assets = lazy(() => import('./pages/Assets.js'));
@@ -36,6 +37,14 @@ export default function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/welcome" element={<Landing />} />
         <Route path="/templates" element={<TemplateList />} />
+        <Route
+          path="/templates/gallery"
+          element={
+            <RoleGuard allowed={['Admin', 'Designer']}>
+              <TemplateGallery />
+            </RoleGuard>
+          }
+        />
         <Route
           path="/templates/new"
           element={
