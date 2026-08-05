@@ -182,12 +182,15 @@ export default function TemplateList() {
 
         {/* Empty */}
         {!loading && !error && templates.length === 0 && (
-          <Card className="p-16 flex flex-col items-center justify-center text-center border-dashed">
+          <Card
+            className="p-16 flex flex-col items-center justify-center text-center"
+            style={{ borderStyle: 'dashed', borderColor: 'var(--nx-accent)', background: 'var(--nx-surface)' }}
+          >
             <div
               className="flex h-16 w-16 items-center justify-center rounded-full mb-5"
-              style={{ background: 'var(--nx-surface)' }}
+              style={{ background: 'var(--nx-accent-tint)' }}
             >
-              <FileText className="h-7 w-7" style={{ color: 'var(--nx-ink-muted)' }} />
+              <FileText className="h-7 w-7" style={{ color: 'var(--nx-accent)' }} />
             </div>
             <h3 className="text-base font-semibold" style={{ color: 'var(--nx-ink)' }}>No templates yet</h3>
             <p className="text-sm mt-1.5 mb-6" style={{ color: 'var(--nx-ink-muted)' }}>
@@ -206,11 +209,14 @@ export default function TemplateList() {
         {!loading && !error && templates.length > 0 && viewMode === 'grid' && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {templates.map((t) => (
-              <Card key={t.id} className="overflow-hidden">
+              <Card
+                key={t.id}
+                className="overflow-hidden shadow-[0_1px_2px_rgba(10,37,64,0.06)] hover:shadow-[0_12px_32px_-12px_rgba(10,37,64,0.14)] transition-shadow duration-200"
+              >
                 <div className="p-5">
                   <div className="flex items-start gap-3">
                     <div
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--nx-radius-sm)]"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
                       style={{ background: 'var(--nx-accent-tint)' }}
                     >
                       <FileText className="h-4 w-4" style={{ color: 'var(--nx-accent)' }} />

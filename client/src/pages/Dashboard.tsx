@@ -8,37 +8,39 @@ import { AppLayout } from '../components/layout/AppLayout.js';
 import { TopBar } from '../components/layout/TopBar.js';
 import { Card } from '../components/ui/card.js';
 import { Button } from '../components/ui/button.js';
+import { cn } from '../lib/utils.js';
 
-interface StatCardProps {
-  title: string;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+interface StatCellProps {
+  label: string;
   value: string | number;
   icon: React.ReactNode;
-  description?: string;
+  index: number;
 }
 
-function StatCard({ title, value, icon, description }: StatCardProps) {
+function StatCell({ label, value, icon, index }: StatCellProps) {
   return (
-    <Card className="p-5 flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium" style={{ color: 'var(--nx-ink-muted)' }}>
-          {title}
-        </span>
-        <div
-          className="flex h-8 w-8 items-center justify-center rounded-[var(--nx-radius-sm)]"
-          style={{ background: 'var(--nx-accent-tint)' }}
-        >
-          <span style={{ color: 'var(--nx-accent)' }} className="[&_svg]:h-4 [&_svg]:w-4">{icon}</span>
-        </div>
+    <div
+      className={cn(
+        'p-5 flex items-center gap-3',
+        index % 2 === 1 && 'border-l',
+        index >= 2 && 'border-t sm:border-t-0',
+        index > 0 && 'sm:border-l'
+      )}
+      style={{ borderColor: 'var(--nx-hairline)' }}
+    >
+      <div
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+        style={{ background: 'var(--nx-accent-tint)' }}
+      >
+        <span style={{ color: 'var(--nx-accent)' }} className="[&_svg]:h-4 [&_svg]:w-4">{icon}</span>
       </div>
-      <div>
-        <div className="text-2xl font-bold tracking-tight" style={{ color: 'var(--nx-ink)' }}>{value}</div>
-        {description && (
-          <p className="text-xs mt-1" style={{ color: 'var(--nx-ink-muted)' }}>
-            {description}
-          </p>
-        )}
+      <div className="min-w-0">
+        <div className="text-xl font-bold tracking-tight truncate" style={{ color: 'var(--nx-ink)' }}>{value}</div>
+        <div className="text-xs" style={{ color: 'var(--nx-ink-muted)' }}>{label}</div>
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -58,6 +60,16 @@ export default function Dashboard() {
   const canEdit = role === 'Admin' || role === 'Designer';
   const recent = templates.slice(0, 6);
 
+  const updatedThisWeek = templates.filter(t => {
+    const ts = t.updated_at ?? t.created_at;
+    return ts && Date.now() - new Date(ts).getTime() <= WEEK_MS;
+  }).length;
+
+  const lastUpdated = (() => {
+    const t = templates.find(x => x.updated_at);
+    return t?.updated_at ? new Date(t.updated_at).toLocaleDateString() : 'Never';
+  })();
+
   return (
     <AppLayout>
       <TopBar
@@ -67,42 +79,15 @@ export default function Dashboard() {
       />
 
       <div className="p-6 space-y-8">
-        {/* Stats row */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            title="Total Templates"
-            value={loading ? '—' : templates.length}
-            icon={<FileText />}
-            description="All time"
-          />
-          <StatCard
-            title="Recent Activity"
-            value={loading ? '—' : recent.length}
-            icon={<TrendingUp />}
-            description="Last 7 days"
-          />
-          <StatCard
-            title="Your Role"
-            value={role}
-            icon={<CheckCircle />}
-            description="Current session"
-          />
-          <StatCard
-            title="Last Updated"
-            value={
-              loading || templates.length === 0
-                ? '—'
-                : (() => {
-                    const t = templates.find((x) => x.updated_at);
-                    return t?.updated_at
-                      ? new Date(t.updated_at).toLocaleDateString()
-                      : 'Never';
-                  })()
-            }
-            icon={<Clock />}
-            description="Most recent edit"
-          />
-        </div>
+        {/* Stats strip — one grouped surface instead of four repeated cards */}
+        <Card className="overflow-hidden">
+          <div className="grid grid-cols-2 sm:grid-cols-4">
+            <StatCell index={0} label="Total templates" value={loading ? '—' : templates.length} icon={<FileText />} />
+            <StatCell index={1} label="Updated this week" value={loading ? '—' : updatedThisWeek} icon={<TrendingUp />} />
+            <StatCell index={2} label="Your role" value={role} icon={<CheckCircle />} />
+            <StatCell index={3} label="Last updated" value={loading ? '—' : lastUpdated} icon={<Clock />} />
+          </div>
+        </Card>
 
         {/* Recent templates */}
         <div>
@@ -135,12 +120,15 @@ export default function Dashboard() {
           )}
 
           {!loading && templates.length === 0 && (
-            <Card className="p-12 flex flex-col items-center justify-center text-center border-dashed">
+            <Card
+              className="p-12 flex flex-col items-center justify-center text-center"
+              style={{ borderStyle: 'dashed', borderColor: 'var(--nx-accent)', background: 'var(--nx-surface)' }}
+            >
               <div
                 className="flex h-14 w-14 items-center justify-center rounded-full mb-4"
-                style={{ background: 'var(--nx-surface)' }}
+                style={{ background: 'var(--nx-accent-tint)' }}
               >
-                <FileText className="h-6 w-6" style={{ color: 'var(--nx-ink-muted)' }} />
+                <FileText className="h-6 w-6" style={{ color: 'var(--nx-accent)' }} />
               </div>
               <p className="text-base font-semibold" style={{ color: 'var(--nx-ink)' }}>No templates yet</p>
               <p className="text-sm mt-1 mb-6" style={{ color: 'var(--nx-ink-muted)' }}>
@@ -160,15 +148,15 @@ export default function Dashboard() {
               {recent.map((t) => (
                 <Card
                   key={t.id}
-                  className="cursor-pointer p-5 transition-colors hover:bg-[var(--nx-surface)]"
+                  className="cursor-pointer p-5 shadow-[0_1px_2px_rgba(10,37,64,0.06)] hover:shadow-[0_12px_32px_-12px_rgba(10,37,64,0.14)] active:scale-[0.99] transition-[box-shadow,transform] duration-150"
                   onClick={() => navigate(canEdit ? `/templates/${t.id}/edit` : `/templates/${t.id}/fill`)}
                 >
                   <div className="flex items-start gap-3">
                     <div
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--nx-radius-sm)]"
-                      style={{ background: 'var(--nx-surface)' }}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                      style={{ background: 'var(--nx-accent-tint)' }}
                     >
-                      <FileText className="h-4 w-4" style={{ color: 'var(--nx-ink-muted)' }} />
+                      <FileText className="h-4 w-4" style={{ color: 'var(--nx-accent)' }} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-sm truncate" style={{ color: 'var(--nx-ink)' }}>{t.name}</p>
@@ -178,7 +166,11 @@ export default function Dashboard() {
                     </div>
                     <span
                       className="shrink-0 px-2 py-0.5 rounded-[var(--nx-radius-sm)] text-[11px] font-medium"
-                      style={{ background: 'var(--nx-surface)', color: 'var(--nx-ink-secondary)' }}
+                      style={
+                        t.updated_at
+                          ? { background: 'var(--nx-surface)', color: 'var(--nx-ink-secondary)' }
+                          : { background: 'var(--nx-accent-tint)', color: 'var(--nx-accent)' }
+                      }
                     >
                       {t.updated_at ? 'Edited' : 'New'}
                     </span>

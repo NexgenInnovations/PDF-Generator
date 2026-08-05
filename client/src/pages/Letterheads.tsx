@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Trash2, Pencil, AlertCircle, Upload } from 'lucide-react';
+import { Plus, Trash2, Pencil, AlertCircle, Upload, BookOpen } from 'lucide-react';
 import { api } from '../lib/api.js';
 import type { LetterheadSummary } from '../types.js';
 import type { Schema } from '@pdfme/common';
@@ -8,6 +8,19 @@ import { AppLayout } from '../components/layout/AppLayout.js';
 import { TopBar } from '../components/layout/TopBar.js';
 import { Card } from '../components/ui/card.js';
 import { Button } from '../components/ui/button.js';
+
+function LetterheadSkeleton() {
+  return (
+    <div
+      className="animate-pulse rounded-[var(--nx-radius-md)] border p-3 space-y-3"
+      style={{ background: 'var(--nx-surface)', borderColor: 'var(--nx-hairline)' }}
+    >
+      <div className="h-8 w-8 rounded-full" style={{ background: 'var(--nx-hairline)' }} />
+      <div className="h-2.5 rounded w-3/4" style={{ background: 'var(--nx-hairline)' }} />
+      <div className="h-2 rounded w-1/2" style={{ background: 'var(--nx-hairline)' }} />
+    </div>
+  );
+}
 
 type PageSizeName = 'A4' | 'Letter' | 'Legal';
 
@@ -178,14 +191,47 @@ export default function Letterheads() {
           </div>
         </div>
 
-        {loading ? (
-          <p className="text-sm" style={{ color: 'var(--nx-ink-muted)' }}>Loading…</p>
-        ) : letterheads.length === 0 ? (
-          <p className="text-sm" style={{ color: 'var(--nx-ink-muted)' }}>No letterheads yet.</p>
-        ) : (
+        {loading && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => <LetterheadSkeleton key={i} />)}
+          </div>
+        )}
+
+        {!loading && letterheads.length === 0 && (
+          <Card
+            className="p-16 flex flex-col items-center justify-center text-center"
+            style={{ borderStyle: 'dashed', borderColor: 'var(--nx-accent)', background: 'var(--nx-surface)' }}
+          >
+            <div
+              className="flex h-14 w-14 items-center justify-center rounded-full mb-4"
+              style={{ background: 'var(--nx-accent-tint)' }}
+            >
+              <BookOpen className="h-6 w-6" style={{ color: 'var(--nx-accent)' }} />
+            </div>
+            <p className="text-base font-semibold" style={{ color: 'var(--nx-ink)' }}>No letterheads yet</p>
+            <p className="text-sm mt-1 mb-6" style={{ color: 'var(--nx-ink-muted)' }}>
+              Create a letterhead to reuse as a header and footer across your templates.
+            </p>
+            <Button onClick={startCreate}>
+              <Plus className="h-4 w-4" />
+              New Letterhead
+            </Button>
+          </Card>
+        )}
+
+        {!loading && letterheads.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {letterheads.map(lh => (
-              <Card key={lh.id} className="p-3 space-y-2">
+              <Card
+                key={lh.id}
+                className="p-3 space-y-2 shadow-[0_1px_2px_rgba(10,37,64,0.06)] hover:shadow-[0_12px_32px_-12px_rgba(10,37,64,0.14)] transition-shadow duration-200"
+              >
+                <div
+                  className="flex h-8 w-8 items-center justify-center rounded-full"
+                  style={{ background: 'var(--nx-accent-tint)' }}
+                >
+                  <BookOpen className="h-3.5 w-3.5" style={{ color: 'var(--nx-accent)' }} />
+                </div>
                 <p className="text-sm font-medium truncate" style={{ color: 'var(--nx-ink)' }} title={lh.name}>
                   {lh.name}
                 </p>
