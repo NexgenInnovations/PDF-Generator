@@ -1,9 +1,45 @@
 import { useEffect, useRef } from 'react';
 import { Designer } from '@pdfme/ui';
 import type { BlankPdf, Schema } from '@pdfme/common';
+import { SeparatorHorizontal, SeparatorVertical } from 'lucide-react';
 import { getFonts, getPlugins } from '../lib/pdfme.js';
 
 const BAND_HEIGHT_MM = 30;
+const LINE_THICKNESS_MM = 0.5;
+const LINE_COLOR = '#000000';
+
+function addDividerLine(designer: Designer | null, orientation: 'horizontal' | 'vertical', bandWidth: number) {
+  if (!designer) return;
+  const template = designer.getTemplate();
+  const schemas = template.schemas[0] ?? [];
+
+  const line: Schema =
+    orientation === 'horizontal'
+      ? {
+          name: `line-${Date.now()}`,
+          type: 'line',
+          position: { x: 0, y: BAND_HEIGHT_MM / 2 - LINE_THICKNESS_MM / 2 },
+          width: bandWidth,
+          height: LINE_THICKNESS_MM,
+          rotate: 0,
+          opacity: 1,
+          readOnly: true,
+          color: LINE_COLOR,
+        }
+      : {
+          name: `line-${Date.now()}`,
+          type: 'line',
+          position: { x: (bandWidth - BAND_HEIGHT_MM) / 2, y: BAND_HEIGHT_MM / 2 - LINE_THICKNESS_MM / 2 },
+          width: BAND_HEIGHT_MM,
+          height: LINE_THICKNESS_MM,
+          rotate: 90,
+          opacity: 1,
+          readOnly: true,
+          color: LINE_COLOR,
+        };
+
+  designer.updateTemplate({ ...template, schemas: [[...schemas, line]] });
+}
 
 function splitStaticSchema(staticSchema: Schema[] | undefined, pageHeight: number) {
   const header: Schema[] = [];
@@ -19,6 +55,35 @@ function splitStaticSchema(staticSchema: Schema[] | undefined, pageHeight: numbe
     }
   });
   return { header, footer };
+}
+
+function DividerButtons(props: { designerRef: React.RefObject<Designer | null>; bandWidth: number }) {
+  const { designerRef, bandWidth } = props;
+  const buttonStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    width: 24, height: 24, borderRadius: 6,
+    border: '1px solid #e6e6e6', background: '#fff', color: 'rgba(0,0,0,0.55)', cursor: 'pointer',
+  };
+  return (
+    <div style={{ display: 'flex', gap: 4 }}>
+      <button
+        type="button"
+        title="Insert horizontal line"
+        style={buttonStyle}
+        onClick={() => addDividerLine(designerRef.current, 'horizontal', bandWidth)}
+      >
+        <SeparatorHorizontal size={14} />
+      </button>
+      <button
+        type="button"
+        title="Insert vertical line"
+        style={buttonStyle}
+        onClick={() => addDividerLine(designerRef.current, 'vertical', bandWidth)}
+      >
+        <SeparatorVertical size={14} />
+      </button>
+    </div>
+  );
 }
 
 export default function HeaderFooterEditor(props: {
@@ -102,11 +167,17 @@ export default function HeaderFooterEditor(props: {
         </div>
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(0,0,0,0.55)', marginBottom: 6 }}>HEADER</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(0,0,0,0.55)' }}>HEADER</div>
+              <DividerButtons designerRef={headerDesignerRef} bandWidth={basePdf.width} />
+            </div>
             <div ref={headerContainerRef} style={{ height: 160, border: '1px solid #e6e6e6', borderRadius: 8, overflow: 'hidden' }} />
           </div>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(0,0,0,0.55)', marginBottom: 6 }}>FOOTER</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(0,0,0,0.55)' }}>FOOTER</div>
+              <DividerButtons designerRef={footerDesignerRef} bandWidth={basePdf.width} />
+            </div>
             <div ref={footerContainerRef} style={{ height: 160, border: '1px solid #e6e6e6', borderRadius: 8, overflow: 'hidden' }} />
           </div>
         </div>
