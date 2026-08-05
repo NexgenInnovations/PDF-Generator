@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { RoleGuard } from './components/RoleGuard.js';
 
+const Landing = lazy(() => import('./pages/Landing.js'));
 const Dashboard = lazy(() => import('./pages/Dashboard.js'));
 const TemplateList = lazy(() => import('./pages/TemplateList.js'));
 const TemplateDesigner = lazy(() => import('./pages/TemplateDesigner.js'));
@@ -33,6 +34,7 @@ export default function App() {
     <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/welcome" element={<Landing />} />
         <Route path="/templates" element={<TemplateList />} />
         <Route
           path="/templates/new"
