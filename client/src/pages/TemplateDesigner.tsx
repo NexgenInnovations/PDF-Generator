@@ -328,13 +328,13 @@ export default function TemplateDesigner() {
     };
   }, [id]);
 
-  // Consume the gallery's seed prompt exactly once. The history entry is stripped straight
-  // away so a reload can't replay it, and the captured copy is dropped after the AI panel
-  // has mounted (child effects run first, so it has already auto-sent) so that manually
-  // closing and reopening the panel doesn't re-send it either.
+  // Consume the gallery's seed prompt exactly once. The history entry is stripped so a
+  // reload can't replay it. React snapshots props at render time: when aiOpen becomes
+  // true, AskAiPanel renders with seedPrompt and closes over that value, so clearing it
+  // later can't retract what the child already captured.
   useEffect(() => {
     if (!seedPrompt) return;
-    if (location.state) navigate(location.pathname, { replace: true, state: null });
+    if (location.state) navigate(location.pathname + location.search + location.hash, { replace: true, state: null });
     if (aiOpen) setSeedPrompt(undefined);
   }, [aiOpen, seedPrompt, location.state, location.pathname, navigate]);
 
