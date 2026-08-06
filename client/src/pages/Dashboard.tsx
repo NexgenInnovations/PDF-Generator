@@ -49,9 +49,6 @@ export default function Dashboard() {
   const { role } = useRole();
   const navigate = useNavigate();
   const location = useLocation();
-  const [startTour, setStartTour] = useState(
-    () => Boolean((location.state as { startTour?: boolean } | null)?.startTour)
-  );
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -63,11 +60,11 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (!startTour) return;
-    if (location.state) navigate(location.pathname + location.search + location.hash, { replace: true, state: null });
+    const shouldStartTour = Boolean((location.state as { startTour?: boolean } | null)?.startTour);
+    if (!shouldStartTour) return;
+    navigate(location.pathname + location.search + location.hash, { replace: true, state: null });
     startProductTour(role);
-    setStartTour(false);
-  }, [startTour, role, location.state, location.pathname, location.search, location.hash, navigate]);
+  }, [location.state, location.pathname, location.search, location.hash, navigate, role]);
 
   const canEdit = role === 'Admin' || role === 'Designer';
   const recent = templates.slice(0, 6);
