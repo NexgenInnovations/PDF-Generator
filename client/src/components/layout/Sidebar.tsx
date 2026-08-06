@@ -19,9 +19,10 @@ interface NavItemProps {
   icon: React.ReactNode;
   label: string;
   end?: boolean;
+  tourId?: string;
 }
 
-function NavItem({ to, icon, label, end }: NavItemProps) {
+function NavItem({ to, icon, label, end, tourId }: NavItemProps) {
   return (
     <TooltipProvider delayDuration={300}>
       <Tooltip>
@@ -29,6 +30,7 @@ function NavItem({ to, icon, label, end }: NavItemProps) {
           <NavLink
             to={to}
             end={end}
+            data-tour={tourId}
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-3 px-3 py-2 text-sm font-medium transition-colors duration-150 rounded-[var(--nx-radius-sm)]',
@@ -85,29 +87,29 @@ export function Sidebar() {
         >
           Navigation
         </p>
-        <NavItem to="/" end icon={<LayoutDashboard className="h-4 w-4" />} label="Dashboard" />
-        <NavItem to="/templates" icon={<FileText className="h-4 w-4" />} label="Templates" />
+        <NavItem to="/" end icon={<LayoutDashboard className="h-4 w-4" />} label="Dashboard" tourId="sidebar-dashboard" />
+        <NavItem to="/templates" icon={<FileText className="h-4 w-4" />} label="Templates" tourId="sidebar-templates" />
         {(role === 'Admin' || role === 'Designer') && (
-          <NavItem to="/templates/new" icon={<PlusCircle className="h-4 w-4" />} label="New Template" />
+          <NavItem to="/templates/new" icon={<PlusCircle className="h-4 w-4" />} label="New Template" tourId="sidebar-new-template" />
         )}
         {(role === 'Admin' || role === 'Designer') && (
-          <NavItem to="/templates/gallery" icon={<LayoutGrid className="h-4 w-4" />} label="Template Gallery" />
+          <NavItem to="/templates/gallery" icon={<LayoutGrid className="h-4 w-4" />} label="Template Gallery" tourId="sidebar-gallery" />
         )}
         {(role === 'Admin' || role === 'Designer') && (
-          <NavItem to="/assets" icon={<Image className="h-4 w-4" />} label="Assets" />
+          <NavItem to="/assets" icon={<Image className="h-4 w-4" />} label="Assets" tourId="sidebar-assets" />
         )}
         {(role === 'Admin' || role === 'Designer') && (
-          <NavItem to="/letterheads" icon={<BookOpen className="h-4 w-4" />} label="Letterheads" />
+          <NavItem to="/letterheads" icon={<BookOpen className="h-4 w-4" />} label="Letterheads" tourId="sidebar-letterheads" />
         )}
         {role === 'Admin' && (
-          <NavItem to="/settings" icon={<Settings className="h-4 w-4" />} label="Settings" />
+          <NavItem to="/settings" icon={<Settings className="h-4 w-4" />} label="Settings" tourId="sidebar-settings" />
         )}
       </nav>
 
       {/* User footer */}
       <div className="p-3 space-y-3" style={{ borderTop: '1px solid var(--nx-hairline)' }}>
         {/* Role switcher */}
-        <div>
+        <div data-tour="sidebar-role-switcher">
           <p
             className="px-1 mb-1.5 text-[11px] font-semibold uppercase tracking-wide"
             style={{ color: 'var(--nx-ink-muted)' }}

@@ -1,4 +1,5 @@
-import { Bell, Search } from 'lucide-react';
+import { Bell, Search, HelpCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Input } from '../ui/input.js';
 import { Button } from '../ui/button.js';
 import { cn } from '../../lib/utils.js';
@@ -11,6 +12,8 @@ interface TopBarProps {
 }
 
 export function TopBar({ title, ctaLabel, onCtaClick, className }: TopBarProps) {
+  const navigate = useNavigate();
+
   return (
     <header
       className={cn('sticky top-0 z-30 flex h-16 items-center gap-4 px-6 bg-white', className)}
@@ -34,6 +37,17 @@ export function TopBar({ title, ctaLabel, onCtaClick, className }: TopBarProps) 
           style={{ background: 'var(--nx-surface)', borderColor: 'var(--nx-hairline)', color: 'var(--nx-ink)' }}
         />
       </div>
+
+      {/* Take a tour */}
+      <button
+        onClick={() => navigate('/', { state: { startTour: true } })}
+        className="flex h-8 w-8 items-center justify-center rounded-[var(--nx-radius-sm)] transition-colors duration-150"
+        style={{ color: 'var(--nx-ink-muted)', border: '1px solid var(--nx-hairline)' }}
+        title="Take a tour"
+      >
+        <HelpCircle className="h-4 w-4" />
+        <span className="sr-only">Take a tour</span>
+      </button>
 
       {/* Bell */}
       <button
