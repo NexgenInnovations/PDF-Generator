@@ -9,7 +9,7 @@ import { TopBar } from '../components/layout/TopBar.js';
 import { Card } from '../components/ui/card.js';
 import { Button } from '../components/ui/button.js';
 import { cn } from '../lib/utils.js';
-import { startProductTour } from '../lib/productTour.js';
+import { startProductTour, TOUR_ANCHORS } from '../lib/productTour.js';
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -59,6 +59,8 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Starts the guided tour when routed here with `startTour` in location state.
+  // The state is cleared immediately so a page reload doesn't replay the tour.
   useEffect(() => {
     const shouldStartTour = Boolean((location.state as { startTour?: boolean } | null)?.startTour);
     if (!shouldStartTour) return;
@@ -89,7 +91,7 @@ export default function Dashboard() {
 
       <div className="p-6 space-y-8">
         {/* Stats strip — one grouped surface instead of four repeated cards */}
-        <Card className="overflow-hidden" data-tour="dashboard-stats">
+        <Card className="overflow-hidden" data-tour={TOUR_ANCHORS.dashboardStats}>
           <div className="grid grid-cols-2 sm:grid-cols-4">
             <StatCell index={0} label="Total templates" value={loading ? '—' : templates.length} icon={<FileText />} />
             <StatCell index={1} label="Updated this week" value={loading ? '—' : updatedThisWeek} icon={<TrendingUp />} />
@@ -99,7 +101,7 @@ export default function Dashboard() {
         </Card>
 
         {/* Recent templates */}
-        <div data-tour="dashboard-recent">
+        <div data-tour={TOUR_ANCHORS.dashboardRecent}>
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--nx-ink)' }}>
               Recent Templates

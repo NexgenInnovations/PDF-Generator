@@ -13,6 +13,7 @@ import { useRole } from '../../context/RoleContext.js';
 import { Avatar, AvatarFallback } from '../ui/avatar.js';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '../ui/tooltip.js';
 import { cn } from '../../lib/utils.js';
+import { TOUR_ANCHORS } from '../../lib/productTour.js';
 
 interface NavItemProps {
   to: string;
@@ -87,29 +88,29 @@ export function Sidebar() {
         >
           Navigation
         </p>
-        <NavItem to="/" end icon={<LayoutDashboard className="h-4 w-4" />} label="Dashboard" tourId="sidebar-dashboard" />
-        <NavItem to="/templates" icon={<FileText className="h-4 w-4" />} label="Templates" tourId="sidebar-templates" />
+        <NavItem to="/" end icon={<LayoutDashboard className="h-4 w-4" />} label="Dashboard" tourId={TOUR_ANCHORS.sidebarDashboard} />
+        <NavItem to="/templates" icon={<FileText className="h-4 w-4" />} label="Templates" tourId={TOUR_ANCHORS.sidebarTemplates} />
         {(role === 'Admin' || role === 'Designer') && (
-          <NavItem to="/templates/new" icon={<PlusCircle className="h-4 w-4" />} label="New Template" tourId="sidebar-new-template" />
+          <NavItem to="/templates/new" icon={<PlusCircle className="h-4 w-4" />} label="New Template" tourId={TOUR_ANCHORS.sidebarNewTemplate} />
         )}
         {(role === 'Admin' || role === 'Designer') && (
-          <NavItem to="/templates/gallery" icon={<LayoutGrid className="h-4 w-4" />} label="Template Gallery" tourId="sidebar-gallery" />
+          <NavItem to="/templates/gallery" icon={<LayoutGrid className="h-4 w-4" />} label="Template Gallery" tourId={TOUR_ANCHORS.sidebarGallery} />
         )}
         {(role === 'Admin' || role === 'Designer') && (
-          <NavItem to="/assets" icon={<Image className="h-4 w-4" />} label="Assets" tourId="sidebar-assets" />
+          <NavItem to="/assets" icon={<Image className="h-4 w-4" />} label="Assets" tourId={TOUR_ANCHORS.sidebarAssets} />
         )}
         {(role === 'Admin' || role === 'Designer') && (
-          <NavItem to="/letterheads" icon={<BookOpen className="h-4 w-4" />} label="Letterheads" tourId="sidebar-letterheads" />
+          <NavItem to="/letterheads" icon={<BookOpen className="h-4 w-4" />} label="Letterheads" tourId={TOUR_ANCHORS.sidebarLetterheads} />
         )}
         {role === 'Admin' && (
-          <NavItem to="/settings" icon={<Settings className="h-4 w-4" />} label="Settings" tourId="sidebar-settings" />
+          <NavItem to="/settings" icon={<Settings className="h-4 w-4" />} label="Settings" />
         )}
       </nav>
 
       {/* User footer */}
       <div className="p-3 space-y-3" style={{ borderTop: '1px solid var(--nx-hairline)' }}>
         {/* Role switcher */}
-        <div data-tour="sidebar-role-switcher">
+        <div data-tour={TOUR_ANCHORS.sidebarRoleSwitcher}>
           <p
             className="px-1 mb-1.5 text-[11px] font-semibold uppercase tracking-wide"
             style={{ color: 'var(--nx-ink-muted)' }}
