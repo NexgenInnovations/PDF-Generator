@@ -80,3 +80,46 @@ body {
 
 /* ── Focus ring ── */
 :focus-visible { outline: 2px solid #000; outline-offset: 2px; }
+
+/* ── Product tour popover (driver.js) ── */
+.driver-popover.nx-tour-popover {
+  background: #ffffff;
+  color: var(--nx-ink);
+  border-radius: var(--nx-radius-md);
+  border: 1px solid var(--nx-hairline);
+  box-shadow: 0 24px 64px rgba(10, 37, 64, 0.18);
+  font-family: 'Figtree', system-ui, -apple-system, sans-serif;
+  padding: 16px;
+}
+.driver-popover.nx-tour-popover .driver-popover-title {
+  color: var(--nx-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+.driver-popover.nx-tour-popover .driver-popover-description {
+  color: var(--nx-ink-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.driver-popover.nx-tour-popover .driver-popover-progress-text {
+  color: var(--nx-ink-muted);
+  font-size: 11px;
+}
+.driver-popover.nx-tour-popover .driver-popover-footer-btn {
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border: 1px solid var(--nx-hairline);
+  background: transparent;
+  color: var(--nx-ink-secondary);
+  text-shadow: none;
+}
+.driver-popover.nx-tour-popover .driver-popover-next-btn {
+  background: var(--nx-accent);
+  border-color: var(--nx-accent);
+  color: #ffffff;
+}
+.driver-popover.nx-tour-popover .driver-popover-close-btn {
+  color: var(--nx-ink-muted);
+}

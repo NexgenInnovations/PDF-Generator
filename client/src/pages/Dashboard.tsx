@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { FileText, Plus, TrendingUp, Clock, CheckCircle } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { useRole } from '../context/RoleContext.js';
@@ -9,6 +9,7 @@ import { TopBar } from '../components/layout/TopBar.js';
 import { Card } from '../components/ui/card.js';
 import { Button } from '../components/ui/button.js';
 import { cn } from '../lib/utils.js';
+import { startProductTour } from '../lib/productTour.js';
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -47,6 +48,10 @@ function StatCell({ label, value, icon, index }: StatCellProps) {
 export default function Dashboard() {
   const { role } = useRole();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [startTour, setStartTour] = useState(
+    () => Boolean((location.state as { startTour?: boolean } | null)?.startTour)
+  );
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -56,6 +61,13 @@ export default function Dashboard() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!startTour) return;
+    if (location.state) navigate(location.pathname + location.search + location.hash, { replace: true, state: null });
+    startProductTour(role);
+    setStartTour(false);
+  }, [startTour, role, location.state, location.pathname, location.search, location.hash, navigate]);
 
   const canEdit = role === 'Admin' || role === 'Designer';
   const recent = templates.slice(0, 6);
@@ -80,7 +92,7 @@ export default function Dashboard() {
 
       <div className="p-6 space-y-8">
         {/* Stats strip — one grouped surface instead of four repeated cards */}
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden" data-tour="dashboard-stats">
           <div className="grid grid-cols-2 sm:grid-cols-4">
             <StatCell index={0} label="Total templates" value={loading ? '—' : templates.length} icon={<FileText />} />
             <StatCell index={1} label="Updated this week" value={loading ? '—' : updatedThisWeek} icon={<TrendingUp />} />
@@ -90,7 +102,7 @@ export default function Dashboard() {
         </Card>
 
         {/* Recent templates */}
-        <div>
+        <div data-tour="dashboard-recent">
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--nx-ink)' }}>
               Recent Templates
