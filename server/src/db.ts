@@ -212,6 +212,16 @@ async function ensureTables(): Promise<void> {
     )
   `);
 
+  await p.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'waitlist_signups')
+    CREATE TABLE waitlist_signups (
+      id              INT IDENTITY(1,1) PRIMARY KEY,
+      name            NVARCHAR(200)    NOT NULL,
+      email           NVARCHAR(320)    NOT NULL UNIQUE,
+      created_at      DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME()
+    )
+  `);
+
   console.log('Tables ready');
 }
 
@@ -863,4 +873,29 @@ export async function listSignatureEventsForSubmission(submissionId: string): Pr
       ORDER BY signed_at ASC
     `);
   return result.recordset;
+}
+
+export async function createWaitlistSignup(
+  name: string,
+  email: string
+): Promise<{ alreadyOnList: boolean }> {
+  try {
+    await getPool()
+      .request()
+      .input('name', sql.NVarChar(200), name)
+      .input('email', sql.NVarChar(320), email)
+      .query(`
+        INSERT INTO waitlist_signups (name, email)
+        VALUES (@name, @email)
+      `);
+    return { alreadyOnList: false };
+  } catch (error) {
+    const err = error as { number?: number };
+    // MSSQL error 2627 (PK/UNIQUE constraint) or 2601 (unique index) — the
+    // email already exists. Treat as a friendly duplicate, not a failure.
+    if (err.number === 2627 || err.number === 2601) {
+      return { alreadyOnList: true };
+    }
+    throw error;
+  }
 }
