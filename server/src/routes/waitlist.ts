@@ -7,10 +7,17 @@ export const waitlistRouter = Router();
 
 const waitlistLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  limit: 5,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests. Please try again later.' },
+  skipFailedRequests: true,
+  // keyGenerator uses req.socket.remoteAddress, which is correct for direct
+  // connections (local testing, no reverse proxy). However, if this endpoint is
+  // deployed behind a reverse proxy (nginx, load balancer, CDN), the socket's
+  // remote address becomes the proxy's address for every request, causing all
+  // clients to share a single rate-limit bucket. Revisit this together with
+  // the app's `trust proxy` setting when deployment topology is finalized.
   keyGenerator: (req: Request) => req.socket.remoteAddress ?? 'unknown',
 });
 
@@ -58,8 +65,7 @@ waitlistRouter.post('/', waitlistLimiter, async (req: Request, res: Response) =>
     const result = await createWaitlistSignup(name.trim(), email.trim().toLowerCase());
     res.status(200).json(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unexpected server error';
     console.error(error);
-    res.status(500).json({ error: message });
+    res.status(500).json({ error: 'Unexpected server error' });
   }
 });

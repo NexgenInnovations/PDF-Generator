@@ -217,8 +217,9 @@ async function ensureTables(): Promise<void> {
     CREATE TABLE waitlist_signups (
       id              INT IDENTITY(1,1) PRIMARY KEY,
       name            NVARCHAR(200)    NOT NULL,
-      email           NVARCHAR(320)    NOT NULL UNIQUE,
-      created_at      DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME()
+      email           NVARCHAR(320)    NOT NULL,
+      created_at      DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
+      CONSTRAINT uq_waitlist_signups_email UNIQUE (email)
     )
   `);
 
