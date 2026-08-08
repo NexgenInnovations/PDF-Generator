@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText,
@@ -16,16 +17,22 @@ const steps = [
     icon: LayoutTemplate,
     title: 'Design',
     description: 'Build a template with the drag-and-drop editor — text, tables, letterheads, dividers.',
+    screenshot: '/landing/designer-canvas.png',
+    screenshotPosition: '20% 15%',
   },
   {
     icon: PenLine,
     title: 'Fill & sign',
     description: 'Share it as a live form. Fill it in, then click to place a signature before sending.',
+    screenshot: '/landing/signed-form.png',
+    screenshotPosition: '60% 15%',
   },
   {
     icon: ListChecks,
     title: 'Track',
     description: 'Every submission lands in one place — draft, submitted, or completed.',
+    screenshot: '/landing/dashboard.png',
+    screenshotPosition: 'center 75%',
   },
 ];
 
@@ -52,17 +59,49 @@ const features = [
   },
 ];
 
+const faqs = [
+  {
+    question: 'What does "self-attested" e-signature mean?',
+    answer:
+      "When someone signs a document in NexGen PDF Manager, their signature and the surrounding action are recorded in an audit trail tied to that submission. It's a self-attested signature, not a third-party-certified digital signature — useful for internal workflows and approvals rather than contexts that require certified digital signing.",
+  },
+  {
+    question: "What's the difference between Admin, Designer, and other roles?",
+    answer:
+      "Admins and Designers can create and manage document templates. Everyone else can fill out forms and add their signature, and see the status of documents they're involved in.",
+  },
+  {
+    question: 'Do I need to write code to build a template?',
+    answer: 'No. Templates are built with a drag-and-drop editor — you add text, tables, letterheads, and dividers visually.',
+  },
+  {
+    question: "Where do submissions go after they're signed?",
+    answer:
+      'Every submission lands in one place, showing its status as draft, submitted, or completed, so nothing gets lost between teams.',
+  },
+];
+
 const cardShadow = '0 12px 32px -12px rgba(10,37,64,0.14)';
 
 export default function Landing() {
   const navigate = useNavigate();
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   return (
     <div style={{ background: 'var(--nx-canvas)', color: 'var(--nx-ink)' }} className="min-h-screen">
       {/* Header */}
       <header
-        className="sticky top-0 z-30 flex h-16 items-center px-6 sm:px-10 bg-white/80 backdrop-blur"
-        style={{ borderBottom: '1px solid var(--nx-hairline)' }}
+        className={`sticky top-0 z-30 flex h-16 items-center gap-6 px-6 sm:px-10 transition-colors duration-200 ${
+          scrolled ? 'bg-white/80 backdrop-blur' : 'bg-transparent'
+        }`}
+        style={{ borderBottom: scrolled ? '1px solid var(--nx-hairline)' : '1px solid transparent' }}
       >
         <div className="flex items-center gap-2 flex-1">
           <div
@@ -73,6 +112,17 @@ export default function Landing() {
           </div>
           <span className="text-sm font-semibold tracking-tight">NexGen PDF Manager</span>
         </div>
+        <nav className="hidden sm:flex items-center gap-6 text-sm font-medium" style={{ color: 'var(--nx-ink-secondary)' }}>
+          <a href="#how-it-works" className="transition-colors hover:text-[var(--nx-ink)]">
+            How it works
+          </a>
+          <a href="#features" className="transition-colors hover:text-[var(--nx-ink)]">
+            Features
+          </a>
+          <a href="#faq" className="transition-colors hover:text-[var(--nx-ink)]">
+            FAQ
+          </a>
+        </nav>
         <Button size="sm" onClick={() => navigate('/')}>
           Go to Dashboard
           <ArrowRight className="h-3.5 w-3.5" />
@@ -116,40 +166,25 @@ export default function Landing() {
               </div>
             </div>
 
-            {/* Visual — mock document, ties into the letterhead divider-line feature */}
+            {/* Visual — real dashboard screenshot in a browser-chrome frame */}
             <div className="relative mx-auto w-full max-w-sm">
               <div
-                className="rounded-2xl border bg-white overflow-hidden rotate-2 transition-transform duration-300 hover:rotate-0"
+                className="rounded-2xl border bg-white overflow-hidden"
                 style={{ borderColor: 'var(--nx-hairline)', boxShadow: cardShadow }}
               >
-                <div className="h-1.5 w-full" style={{ background: 'var(--nx-accent)' }} />
-                <div className="p-6 space-y-5">
-                  <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 rounded-[var(--nx-radius-sm)]" style={{ background: 'var(--nx-accent-tint)' }} />
-                    <div className="space-y-1.5">
-                      <div className="h-2.5 w-28 rounded-full" style={{ background: 'rgba(10,37,64,0.10)' }} />
-                      <div className="h-2 w-16 rounded-full" style={{ background: 'rgba(10,37,64,0.06)' }} />
-                    </div>
-                  </div>
-                  <div className="h-px w-full" style={{ background: 'var(--nx-hairline)' }} />
-                  <div className="space-y-2">
-                    <div className="h-2 w-full rounded-full" style={{ background: 'rgba(10,37,64,0.06)' }} />
-                    <div className="h-2 w-5/6 rounded-full" style={{ background: 'rgba(10,37,64,0.06)' }} />
-                    <div className="h-2 w-4/6 rounded-full" style={{ background: 'rgba(10,37,64,0.06)' }} />
-                  </div>
-                  <div className="flex justify-end">
-                    <div
-                      className="flex items-center gap-1.5 rounded-[var(--nx-radius-sm)] px-3 py-1.5"
-                      style={{ background: 'var(--nx-accent-tint)', border: '1px solid var(--nx-accent)' }}
-                    >
-                      <PenLine className="h-3.5 w-3.5" style={{ color: 'var(--nx-accent)' }} />
-                      <span className="text-xs font-medium" style={{ color: 'var(--nx-accent)' }}>Signed</span>
-                    </div>
-                  </div>
+                <div className="flex items-center gap-1.5 px-3 py-2" style={{ background: 'var(--nx-hairline)' }}>
+                  <span className="h-2 w-2 rounded-full" style={{ background: 'var(--nx-ink-muted)' }} />
+                  <span className="h-2 w-2 rounded-full" style={{ background: 'var(--nx-ink-muted)' }} />
+                  <span className="h-2 w-2 rounded-full" style={{ background: 'var(--nx-ink-muted)' }} />
                 </div>
+                <img
+                  src="/landing/dashboard.png"
+                  alt="NexGen PDF Manager dashboard"
+                  className="block w-full aspect-[16/9] object-cover"
+                />
               </div>
               <div
-                className="absolute -bottom-5 -left-6 flex items-center gap-2.5 rounded-xl bg-white px-4 py-3 -rotate-3"
+                className="absolute -bottom-5 -left-6 flex items-center gap-2.5 rounded-xl bg-white px-4 py-3"
                 style={{ border: '1px solid var(--nx-hairline)', boxShadow: cardShadow }}
               >
                 <div className="flex h-7 w-7 items-center justify-center rounded-full" style={{ background: 'var(--nx-accent-tint)' }}>
@@ -165,8 +200,8 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* How it works — numbered flow, not a plain card row */}
-      <section className="px-6 sm:px-10 pb-20 sm:pb-24 max-w-7xl mx-auto">
+      {/* How it works — numbered flow with screenshot crops */}
+      <section id="how-it-works" className="px-6 sm:px-10 pb-20 sm:pb-24 max-w-7xl mx-auto">
         <div className="grid sm:grid-cols-3 gap-8 relative">
           <div
             aria-hidden
@@ -185,13 +220,24 @@ export default function Landing() {
               <p className="text-sm max-w-[240px]" style={{ color: 'var(--nx-ink-secondary)' }}>
                 {step.description}
               </p>
+              <div
+                className="w-full max-w-[240px] h-36 rounded-lg overflow-hidden mt-1"
+                style={{ border: '1px solid var(--nx-hairline)' }}
+              >
+                <img
+                  src={step.screenshot}
+                  alt={`${step.title} screenshot`}
+                  className="h-full w-full object-cover"
+                  style={{ objectPosition: step.screenshotPosition }}
+                />
+              </div>
             </div>
           ))}
         </div>
       </section>
 
       {/* Features */}
-      <section className="px-6 sm:px-10 pb-20 sm:pb-24 max-w-7xl mx-auto">
+      <section id="features" className="px-6 sm:px-10 pb-20 sm:pb-24 max-w-7xl mx-auto">
         <div className="mb-10 text-center">
           <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">Everything the workflow needs</h2>
           <p className="mt-3 text-base sm:text-lg max-w-xl mx-auto" style={{ color: 'var(--nx-ink-secondary)' }}>
@@ -217,6 +263,25 @@ export default function Landing() {
                 </p>
               </div>
             </Card>
+          ))}
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section id="faq" className="px-6 sm:px-10 pb-20 sm:pb-24 max-w-3xl mx-auto">
+        <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-center mb-10">
+          Frequently asked questions
+        </h2>
+        <div className="flex flex-col">
+          {faqs.map((faq, i) => (
+            <div key={faq.question} className="py-6" style={i > 0 ? { borderTop: '1px solid var(--nx-hairline)' } : undefined}>
+              <h3 className="text-base font-semibold" style={{ color: 'var(--nx-ink)' }}>
+                {faq.question}
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed" style={{ color: 'var(--nx-ink-secondary)' }}>
+                {faq.answer}
+              </p>
+            </div>
           ))}
         </div>
       </section>
@@ -247,10 +312,18 @@ export default function Landing() {
 
       {/* Footer */}
       <footer
-        className="px-6 sm:px-10 py-6 text-center text-xs"
+        className="px-6 sm:px-10 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs"
         style={{ borderTop: '1px solid var(--nx-hairline)', color: 'var(--nx-ink-muted)' }}
       >
-        NexGen PDF Manager
+        <span>NexGen PDF Manager</span>
+        <div className="flex items-center gap-4">
+          <button onClick={() => navigate('/')} className="transition-colors hover:text-[var(--nx-ink-secondary)]">
+            Dashboard
+          </button>
+          <button onClick={() => navigate('/templates')} className="transition-colors hover:text-[var(--nx-ink-secondary)]">
+            Templates
+          </button>
+        </div>
       </footer>
     </div>
   );
