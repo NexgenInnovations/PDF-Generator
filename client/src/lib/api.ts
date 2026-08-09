@@ -193,4 +193,11 @@ export const api = {
   deleteLetterhead: (id: string) => request<void>(`/letterheads/${id}`, { method: "DELETE" }),
 
   listSubmissions: (templateId: string) => request<SubmissionRecord[]>(`/templates/${templateId}/submissions`),
+
+  submitWaitlist: (name: string, email: string) =>
+    request<{ alreadyOnList: boolean }>("/waitlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email }),
+    }),
 };

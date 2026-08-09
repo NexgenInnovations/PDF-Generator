@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import { RoleGuard } from './components/RoleGuard.js';
 
 const Landing = lazy(() => import('./pages/Landing.js'));
+const Waitlist = lazy(() => import('./pages/Waitlist.js'));
 const Dashboard = lazy(() => import('./pages/Dashboard.js'));
 const TemplateList = lazy(() => import('./pages/TemplateList.js'));
 const TemplateGallery = lazy(() => import('./pages/TemplateGallery.js'));
@@ -36,6 +37,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/welcome" element={<Landing />} />
+        <Route path="/waitlist" element={<Waitlist />} />
         <Route path="/templates" element={<TemplateList />} />
         <Route
           path="/templates/gallery"
