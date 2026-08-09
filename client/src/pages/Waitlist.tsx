@@ -19,6 +19,8 @@ export default function Waitlist() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    setSubmitError(null);
+    setValidationError(null);
 
     if (name.trim().length === 0) {
       setValidationError('Please enter your name.');
@@ -28,15 +30,19 @@ export default function Waitlist() {
       setValidationError('Please enter a valid email address.');
       return;
     }
-    setValidationError(null);
-    setSubmitError(null);
     setStatus('submitting');
 
     try {
       const result = await api.submitWaitlist(name.trim(), email.trim());
       setStatus(result.alreadyOnList ? 'duplicate' : 'success');
     } catch (err) {
-      setSubmitError((err as Error).message);
+      const raw = (err as Error).message;
+      console.error('Waitlist signup failed:', raw);
+      setSubmitError(
+        raw.startsWith('429')
+          ? "You're submitting a bit fast — please wait a few minutes and try again."
+          : 'Something went wrong — please try again in a few minutes.'
+      );
       setStatus('error');
     }
   };
@@ -75,7 +81,7 @@ export default function Waitlist() {
 
         <div className="mt-10 w-full max-w-sm">
           {status === 'success' || status === 'duplicate' ? (
-            <p className="text-base font-semibold" style={{ color: 'var(--nx-ink)' }}>
+            <p className="text-base font-semibold" role="status" style={{ color: 'var(--nx-ink)' }}>
               {status === 'success'
                 ? "You're on the list — we'll be in touch."
                 : "You're already on the list!"}
@@ -102,6 +108,7 @@ export default function Waitlist() {
               {validationError && (
                 <div
                   className="flex items-center gap-2 rounded-[var(--nx-radius-sm)] p-3 text-sm"
+                  role="alert"
                   style={{ background: 'var(--nx-destructive-tint)', color: 'var(--nx-destructive)' }}
                 >
                   <AlertCircle className="h-4 w-4 shrink-0" />
@@ -111,6 +118,7 @@ export default function Waitlist() {
               {status === 'error' && submitError && (
                 <div
                   className="flex items-center gap-2 rounded-[var(--nx-radius-sm)] p-3 text-sm"
+                  role="alert"
                   style={{ background: 'var(--nx-destructive-tint)', color: 'var(--nx-destructive)' }}
                 >
                   <AlertCircle className="h-4 w-4 shrink-0" />

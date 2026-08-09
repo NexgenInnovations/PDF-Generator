@@ -18,21 +18,21 @@ const steps = [
     title: 'Design',
     description: 'Build a template with the drag-and-drop editor — text, tables, letterheads, dividers.',
     screenshot: '/landing/designer-canvas.png',
-    screenshotPosition: '20% 15%',
+    screenshotPosition: '30% 37%',
   },
   {
     icon: PenLine,
     title: 'Fill & sign',
     description: 'Share it as a live form. Fill it in, then click to place a signature before sending.',
     screenshot: '/landing/signed-form.png',
-    screenshotPosition: '60% 15%',
+    screenshotPosition: '24% 19%',
   },
   {
     icon: ListChecks,
     title: 'Track',
     description: 'Every submission lands in one place — draft, submitted, or completed.',
     screenshot: '/landing/dashboard.png',
-    screenshotPosition: 'center 75%',
+    screenshotPosition: '0% 0%',
   },
 ];
 
@@ -201,7 +201,7 @@ export default function Landing() {
       </section>
 
       {/* How it works — numbered flow with screenshot crops */}
-      <section id="how-it-works" className="px-6 sm:px-10 pb-20 sm:pb-24 max-w-7xl mx-auto">
+      <section id="how-it-works" className="px-6 sm:px-10 pb-20 sm:pb-24 max-w-7xl mx-auto scroll-mt-24">
         <div className="grid sm:grid-cols-3 gap-8 relative">
           <div
             aria-hidden
@@ -222,22 +222,23 @@ export default function Landing() {
               </p>
               <div
                 className="w-full max-w-[240px] h-36 rounded-lg overflow-hidden mt-1"
-                style={{ border: '1px solid var(--nx-hairline)' }}
-              >
-                <img
-                  src={step.screenshot}
-                  alt={`${step.title} screenshot`}
-                  className="h-full w-full object-cover"
-                  style={{ objectPosition: step.screenshotPosition }}
-                />
-              </div>
+                style={{
+                  border: '1px solid var(--nx-hairline)',
+                  backgroundImage: `url(${step.screenshot})`,
+                  backgroundSize: '640px 360px',
+                  backgroundPosition: step.screenshotPosition,
+                  backgroundRepeat: 'no-repeat',
+                }}
+                role="img"
+                aria-label={`${step.title} screenshot`}
+              />
             </div>
           ))}
         </div>
       </section>
 
       {/* Features */}
-      <section id="features" className="px-6 sm:px-10 pb-20 sm:pb-24 max-w-7xl mx-auto">
+      <section id="features" className="px-6 sm:px-10 pb-20 sm:pb-24 max-w-7xl mx-auto scroll-mt-24">
         <div className="mb-10 text-center">
           <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">Everything the workflow needs</h2>
           <p className="mt-3 text-base sm:text-lg max-w-xl mx-auto" style={{ color: 'var(--nx-ink-secondary)' }}>
@@ -268,7 +269,7 @@ export default function Landing() {
       </section>
 
       {/* FAQ */}
-      <section id="faq" className="px-6 sm:px-10 pb-20 sm:pb-24 max-w-3xl mx-auto">
+      <section id="faq" className="px-6 sm:px-10 pb-20 sm:pb-24 max-w-3xl mx-auto scroll-mt-24">
         <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-center mb-10">
           Frequently asked questions
         </h2>
@@ -322,6 +323,9 @@ export default function Landing() {
           </button>
           <button onClick={() => navigate('/templates')} className="transition-colors hover:text-[var(--nx-ink-secondary)]">
             Templates
+          </button>
+          <button onClick={() => navigate('/waitlist')} className="transition-colors hover:text-[var(--nx-ink-secondary)]">
+            Join the waitlist
           </button>
         </div>
       </footer>
