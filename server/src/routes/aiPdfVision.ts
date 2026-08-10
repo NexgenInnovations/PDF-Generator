@@ -1,5 +1,6 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { runAiPdfVisionDetection } from '../services/aiPdfVisionService.js';
+import { requireAuth, requireRole, type AuthedRequest } from '../middleware/auth.js';
 
 export const aiPdfVisionRouter = Router();
 
@@ -48,7 +49,7 @@ const MAX_IMAGES = 10;
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-aiPdfVisionRouter.post('/detect-from-pdf', async (req: Request, res: Response) => {
+aiPdfVisionRouter.post('/detect-from-pdf', requireAuth, requireRole(['Admin', 'Designer']), async (req: AuthedRequest, res: Response) => {
   const { images } = req.body as { images?: string[] };
 
   if (!Array.isArray(images) || images.length === 0 || !images.every(i => typeof i === 'string')) {

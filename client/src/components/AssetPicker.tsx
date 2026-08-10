@@ -1,10 +1,11 @@
 // client/src/components/AssetPicker.tsx
 import { useEffect, useState } from 'react';
-import { api } from '../lib/api.js';
+import { api, authHeaders } from '../lib/api.js';
 import type { AssetRecord } from '../types.js';
+import AssetThumbnail from './AssetThumbnail.js';
 
 async function fetchAssetAsDataUrl(id: string): Promise<string> {
-  const res = await fetch(api.assetFileUrl(id));
+  const res = await fetch(api.assetFileUrl(id), { headers: await authHeaders() });
   if (!res.ok) throw new Error(`Failed to fetch asset: ${res.status}`);
   const blob = await res.blob();
   return new Promise((resolve, reject) => {
@@ -16,7 +17,7 @@ async function fetchAssetAsDataUrl(id: string): Promise<string> {
 }
 
 async function fetchAssetAsText(id: string): Promise<string> {
-  const res = await fetch(api.assetFileUrl(id));
+  const res = await fetch(api.assetFileUrl(id), { headers: await authHeaders() });
   if (!res.ok) throw new Error(`Failed to fetch asset: ${res.status}`);
   return res.text();
 }
@@ -109,8 +110,8 @@ export default function AssetPicker(props: {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     background: '#f7f7f5', borderRadius: 8, overflow: 'hidden',
                   }}>
-                    <img
-                      src={api.assetFileUrl(asset.id)}
+                    <AssetThumbnail
+                      assetId={asset.id}
                       alt={asset.name}
                       style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
                     />

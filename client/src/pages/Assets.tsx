@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Upload, Trash2, AlertCircle, ImageIcon } from 'lucide-react';
 import { api } from '../lib/api.js';
 import type { AssetRecord } from '../types.js';
+import AssetThumbnail from '../components/AssetThumbnail.js';
 import { AppLayout } from '../components/layout/AppLayout.js';
 import { TopBar } from '../components/layout/TopBar.js';
 import { Card } from '../components/ui/card.js';
@@ -138,8 +139,8 @@ export default function Assets() {
                   className="flex items-center justify-center rounded-[var(--nx-radius-sm)] overflow-hidden"
                   style={{ background: 'var(--nx-surface)', aspectRatio: '1 / 1' }}
                 >
-                  <img
-                    src={api.assetFileUrl(asset.id)}
+                  <AssetThumbnail
+                    assetId={asset.id}
                     alt={asset.name}
                     className="max-h-full max-w-full object-contain"
                   />

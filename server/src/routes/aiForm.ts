@@ -1,5 +1,6 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { runAiFormChat, type ChatMessage, type OccupiedRegion } from '../services/aiFormService.js';
+import { requireAuth, requireRole, type AuthedRequest } from '../middleware/auth.js';
 
 export const aiFormRouter = Router();
 
@@ -75,7 +76,7 @@ function isValidOccupiedRegion(r: unknown): r is OccupiedRegion {
   );
 }
 
-aiFormRouter.post('/chat', async (req: Request, res: Response) => {
+aiFormRouter.post('/chat', requireAuth, requireRole(['Admin', 'Designer']), async (req: AuthedRequest, res: Response) => {
   const { messages, occupiedRegions } = req.body as {
     messages?: ChatMessage[];
     occupiedRegions?: unknown;

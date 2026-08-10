@@ -7,6 +7,7 @@ import {
   getLatestPublishedVersion,
   getPublishedVersion,
   getTemplate,
+  isUniqueViolation,
   listPublishedVersions,
   listTemplates,
   publishVersion,
@@ -295,8 +296,7 @@ templatesRouter.post('/:id/publish', requireAuth, requireRole(['Admin', 'Designe
 
     res.json({ schema: published.schema, version: published.version, tag: published.tag });
   } catch (error) {
-    const dbError = error as { code?: string };
-    if (dbError.code === '23505') {
+    if (isUniqueViolation(error)) {
       res.status(409).json({ error: `Tag "${(req.body as { tag?: string }).tag}" is already used for this template` });
       return;
     }

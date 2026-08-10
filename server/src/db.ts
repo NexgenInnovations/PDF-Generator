@@ -15,12 +15,17 @@ const pool = new Pool({
   connectionString: process.env.SUPABASE_DB_URL ?? '',
 });
 
+// An idle client can emit an 'error' event (e.g. the DB restarting or the
+// connection being dropped by the server). Without a listener, that event
+// crashes the Node process — this keeps it a logged, non-fatal event.
+pool.on('error', (err) => console.error('Unexpected Postgres pool error', err));
+
 export async function initDb(): Promise<void> {
   await pool.query('select 1');
   console.log('Connected to Postgres (Supabase)');
 }
 
-function isUniqueViolation(error: unknown): boolean {
+export function isUniqueViolation(error: unknown): boolean {
   return typeof error === 'object' && error !== null && (error as { code?: string }).code === '23505';
 }
 

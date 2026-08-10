@@ -151,3 +151,15 @@ supabase/migrations/
 - An `Owner` role above `Admin`
 - Org-level billing or settings beyond a name
 - Requiring login on the public form-fill flow
+
+---
+
+## Known Limitations (as of initial implementation)
+
+These are legitimate, accepted tradeoffs for a local-dev-only implementation, surfaced by the final whole-branch review. They are not bugs to fix in a later pass by default — but anyone extending this beyond local dev should read this section first.
+
+1. **No multi-tenant data isolation yet.** Any authenticated user can create a new organization via `/auth/organizations` and become that org's Admin — and because the app's own data tables (`pdf_templates`, `assets`, etc., migrated in Task 2.5) have no `org_id` column or scoping, an Admin of *any* org can read/modify/delete *all* app data across every organization, not just their own. This was explicitly out of scope for this plan (see "Server-Side Enforcement" above), but the practical consequence is that "server-side role enforcement" should not be read as "tenant isolation" — there is currently only one shared pool of app data, gated by role but not by org. Real multi-tenant isolation would require adding `org_id` to the app tables and scoping every query.
+
+2. **Email/password sign-in is enabled at the Supabase Auth server level**, even though the app's UI only offers Google. This is intentional for local dev — `server/scripts/mint-test-token.ts` depends on it to create test users without real Google credentials — but it means anyone who can reach the local Auth server directly (not through the app's UI) can create an account without a Google identity. Before this configuration is used anywhere beyond a single developer's machine, disable `[auth.email] enable_signup` in `supabase/config.toml` (and update `mint-test-token.ts` to no longer depend on it, if dev tooling is still needed).
+
+3. **Token verification costs a network round-trip per request.** `requireAuth` calls `supabaseAdmin.auth.getUser()`, which is a real network call to the Auth server on every authenticated request — negligible against a local Docker instance, but a real per-request cost against a hosted Supabase project. If this moves to production traffic at meaningful volume, switch to `supabase.auth.getClaims()` (JWKS-based local verification — handles the asymmetric signing key that the original local-secret approach couldn't) instead.
