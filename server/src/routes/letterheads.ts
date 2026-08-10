@@ -1,5 +1,5 @@
 // server/src/routes/letterheads.ts
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { listLetterheads, getLetterhead, createLetterhead, updateLetterhead, deleteLetterhead } from '../db.js';
 import { requireAuth, requireRole, type AuthedRequest } from '../middleware/auth.js';
 

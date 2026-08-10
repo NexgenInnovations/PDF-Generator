@@ -1,5 +1,5 @@
 // server/src/routes/submissions.ts
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { getTemplate, listSubmissionsForTemplate, listSignatureEventsForSubmission } from '../db.js';
 import { requireAuth, requireRole, type AuthedRequest } from '../middleware/auth.js';
 
