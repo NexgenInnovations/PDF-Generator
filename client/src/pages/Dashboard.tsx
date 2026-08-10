@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { FileText, Plus, TrendingUp, Clock, CheckCircle } from 'lucide-react';
 import { api } from '../lib/api.js';
-import { useRole } from '../context/RoleContext.js';
+import { useAuth } from '../context/AuthContext.js';
 import type { TemplateSummary } from '../types.js';
 import { AppLayout } from '../components/layout/AppLayout.js';
 import { TopBar } from '../components/layout/TopBar.js';
@@ -46,7 +46,7 @@ function StatCell({ label, value, icon, index }: StatCellProps) {
 }
 
 export default function Dashboard() {
-  const { role } = useRole();
+  const { role } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
@@ -65,7 +65,7 @@ export default function Dashboard() {
     const shouldStartTour = Boolean((location.state as { startTour?: boolean } | null)?.startTour);
     if (!shouldStartTour) return;
     navigate(location.pathname + location.search + location.hash, { replace: true, state: null });
-    startProductTour(role);
+    if (role) startProductTour(role);
   }, [location.state, location.pathname, location.search, location.hash, navigate, role]);
 
   const canEdit = role === 'Admin' || role === 'Designer';
@@ -95,7 +95,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 sm:grid-cols-4">
             <StatCell index={0} label="Total templates" value={loading ? '—' : templates.length} icon={<FileText />} />
             <StatCell index={1} label="Updated this week" value={loading ? '—' : updatedThisWeek} icon={<TrendingUp />} />
-            <StatCell index={2} label="Your role" value={role} icon={<CheckCircle />} />
+            <StatCell index={2} label="Your role" value={role ?? '—'} icon={<CheckCircle />} />
             <StatCell index={3} label="Last updated" value={loading ? '—' : lastUpdated} icon={<Clock />} />
           </div>
         </Card>

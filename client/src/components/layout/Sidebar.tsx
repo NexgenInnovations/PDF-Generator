@@ -9,8 +9,8 @@ import {
   BookOpen,
   LayoutGrid,
 } from 'lucide-react';
-import { useRole } from '../../context/RoleContext.js';
-import { Avatar, AvatarFallback } from '../ui/avatar.js';
+import { useAuth } from '../../context/AuthContext.js';
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar.js';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '../ui/tooltip.js';
 import { cn } from '../../lib/utils.js';
 import { TOUR_ANCHORS } from '../../lib/productTour.js';
@@ -52,9 +52,21 @@ function NavItem({ to, icon, label, end, tourId }: NavItemProps) {
 }
 
 export function Sidebar() {
-  const { role, setRole } = useRole();
+  const { role, profile, signOut } = useAuth();
   const navigate = useNavigate();
-  const initials = role === 'FormFiller' ? 'FF' : role.slice(0, 2).toUpperCase();
+  const displayName = profile?.fullName ?? 'Account';
+  const initials = displayName
+    .trim()
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || 'U';
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login');
+  };
 
   return (
     <aside
@@ -108,58 +120,32 @@ export function Sidebar() {
       </nav>
 
       {/* User footer */}
-      <div className="p-3 space-y-3" style={{ borderTop: '1px solid var(--nx-hairline)' }}>
-        {/* Role switcher */}
-        <div data-tour={TOUR_ANCHORS.sidebarRoleSwitcher}>
-          <p
-            className="px-1 mb-1.5 text-[11px] font-semibold uppercase tracking-wide"
-            style={{ color: 'var(--nx-ink-muted)' }}
-          >
-            Switch Role
-          </p>
-          <div className="flex gap-1">
-            {(['Admin', 'Designer', 'FormFiller'] as const).map((r) => (
-              <TooltipProvider key={r} delayDuration={200}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => setRole(r)}
-                      className={cn(
-                        'flex-1 px-1 py-1 text-[11px] font-medium transition-colors duration-150 rounded-[var(--nx-radius-sm)]',
-                        role === r
-                          ? 'text-white'
-                          : 'text-[var(--nx-ink-secondary)] hover:bg-[var(--nx-surface)] border border-[var(--nx-hairline)]'
-                      )}
-                      style={role === r ? { background: 'var(--nx-accent)' } : undefined}
-                    >
-                      {r === 'FormFiller' ? 'Filler' : r}
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">Switch to {r}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ))}
-          </div>
-        </div>
-
-        {/* User row */}
+      <div
+        className="p-3 space-y-3"
+        style={{ borderTop: '1px solid var(--nx-hairline)' }}
+        data-tour={TOUR_ANCHORS.sidebarRoleSwitcher}
+      >
         <div className="flex items-center gap-3 px-1">
           <Avatar className="h-8 w-8 shrink-0">
-            <AvatarFallback className="text-xs font-semibold text-white" style={{ background: 'var(--nx-ink)' }}>
-              {initials}
-            </AvatarFallback>
+            {profile?.avatarUrl ? (
+              <AvatarImage src={profile.avatarUrl} alt={displayName} />
+            ) : (
+              <AvatarFallback className="text-xs font-semibold text-white" style={{ background: 'var(--nx-ink)' }}>
+                {initials}
+              </AvatarFallback>
+            )}
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold truncate" style={{ color: 'var(--nx-ink)' }}>{role}</p>
+            <p className="text-sm font-semibold truncate" style={{ color: 'var(--nx-ink)' }}>{displayName}</p>
             <p className="text-[11px] truncate" style={{ color: 'var(--nx-ink-muted)' }}>
-              Current role
+              {role ?? '—'}
             </p>
           </div>
           <button
-            onClick={() => navigate('/')}
+            onClick={() => void handleSignOut()}
             className="transition-colors"
             style={{ color: 'var(--nx-ink-muted)' }}
-            title="Home"
+            title="Sign out"
           >
             <LogOut className="h-4 w-4" />
           </button>

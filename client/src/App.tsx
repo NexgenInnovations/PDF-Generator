@@ -1,9 +1,12 @@
 import { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { RoleGuard } from './components/RoleGuard.js';
+import { AuthGuard } from './components/AuthGuard.js';
 
 const Landing = lazy(() => import('./pages/Landing.js'));
 const Waitlist = lazy(() => import('./pages/Waitlist.js'));
+const Login = lazy(() => import('./pages/Login.js'));
+const Onboarding = lazy(() => import('./pages/Onboarding.js'));
 const Dashboard = lazy(() => import('./pages/Dashboard.js'));
 const TemplateList = lazy(() => import('./pages/TemplateList.js'));
 const TemplateGallery = lazy(() => import('./pages/TemplateGallery.js'));
@@ -12,6 +15,7 @@ const FormFill = lazy(() => import('./pages/FormFill.js'));
 const Assets = lazy(() => import('./pages/Assets.js'));
 const Letterheads = lazy(() => import('./pages/Letterheads.js'));
 const Submissions = lazy(() => import('./pages/Submissions.js'));
+const Settings = lazy(() => import('./pages/Settings.js'));
 const NotFound = lazy(() => import('./pages/NotFound.js'));
 
 function RouteFallback() {
@@ -35,57 +39,83 @@ export default function App() {
   return (
     <Suspense fallback={<RouteFallback />}>
       <Routes>
-        <Route path="/" element={<Dashboard />} />
         <Route path="/welcome" element={<Landing />} />
         <Route path="/waitlist" element={<Waitlist />} />
-        <Route path="/templates" element={<TemplateList />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="/join/:code" element={<Onboarding />} />
+        <Route path="/templates/:id/fill" element={<FormFill />} />
+
+        <Route path="/" element={<AuthGuard><Dashboard /></AuthGuard>} />
+        <Route path="/templates" element={<AuthGuard><TemplateList /></AuthGuard>} />
         <Route
           path="/templates/gallery"
           element={
-            <RoleGuard allowed={['Admin', 'Designer']}>
-              <TemplateGallery />
-            </RoleGuard>
+            <AuthGuard>
+              <RoleGuard allowed={['Admin', 'Designer']}>
+                <TemplateGallery />
+              </RoleGuard>
+            </AuthGuard>
           }
         />
         <Route
           path="/templates/new"
           element={
-            <RoleGuard allowed={['Admin', 'Designer']}>
-              <TemplateDesigner />
-            </RoleGuard>
+            <AuthGuard>
+              <RoleGuard allowed={['Admin', 'Designer']}>
+                <TemplateDesigner />
+              </RoleGuard>
+            </AuthGuard>
           }
         />
         <Route
           path="/templates/:id/edit"
           element={
-            <RoleGuard allowed={['Admin', 'Designer']}>
-              <TemplateDesigner />
-            </RoleGuard>
+            <AuthGuard>
+              <RoleGuard allowed={['Admin', 'Designer']}>
+                <TemplateDesigner />
+              </RoleGuard>
+            </AuthGuard>
           }
         />
-        <Route path="/templates/:id/fill" element={<FormFill />} />
         <Route
           path="/assets"
           element={
-            <RoleGuard allowed={['Admin', 'Designer']}>
-              <Assets />
-            </RoleGuard>
+            <AuthGuard>
+              <RoleGuard allowed={['Admin', 'Designer']}>
+                <Assets />
+              </RoleGuard>
+            </AuthGuard>
           }
         />
         <Route
           path="/letterheads"
           element={
-            <RoleGuard allowed={['Admin', 'Designer']}>
-              <Letterheads />
-            </RoleGuard>
+            <AuthGuard>
+              <RoleGuard allowed={['Admin', 'Designer']}>
+                <Letterheads />
+              </RoleGuard>
+            </AuthGuard>
           }
         />
         <Route
           path="/templates/:id/submissions"
           element={
-            <RoleGuard allowed={['Admin', 'Designer']}>
-              <Submissions />
-            </RoleGuard>
+            <AuthGuard>
+              <RoleGuard allowed={['Admin', 'Designer']}>
+                <Submissions />
+              </RoleGuard>
+            </AuthGuard>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <AuthGuard>
+              <RoleGuard allowed={['Admin']}>
+                <Settings />
+              </RoleGuard>
+            </AuthGuard>
           }
         />
         <Route path="*" element={<NotFound />} />

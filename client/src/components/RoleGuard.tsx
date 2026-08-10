@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
-import { useRole } from '../context/RoleContext.js';
+import { useAuth } from '../context/AuthContext.js';
 import type { Role } from '../types.js';
 
 interface RoleGuardProps {
@@ -9,7 +9,7 @@ interface RoleGuardProps {
 }
 
 export function RoleGuard({ allowed, children }: RoleGuardProps) {
-  const { role } = useRole();
-  if (!allowed.includes(role)) return <Navigate to="/" replace />;
+  const { role } = useAuth();
+  if (!role || !allowed.includes(role)) return <Navigate to="/" replace />;
   return <>{children}</>;
 }

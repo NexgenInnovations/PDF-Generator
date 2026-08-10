@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Plus, Edit2, Trash2, FileText, Grid, List, AlertCircle, ClipboardList } from 'lucide-react';
 import { api } from '../lib/api.js';
-import { useRole } from '../context/RoleContext.js';
+import { useAuth } from '../context/AuthContext.js';
 import type { TemplateSummary } from '../types.js';
 import { AppLayout } from '../components/layout/AppLayout.js';
 import { TopBar } from '../components/layout/TopBar.js';
@@ -96,7 +96,7 @@ function FillVersionPicker({ templateId, onClose }: { templateId: string; onClos
 }
 
 export default function TemplateList() {
-  const { role } = useRole();
+  const { role } = useAuth();
   const navigate = useNavigate();
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
   const [loading, setLoading] = useState(true);

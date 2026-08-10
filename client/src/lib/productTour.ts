@@ -83,8 +83,8 @@ export function startProductTour(role: Role) {
       {
         element: `[data-tour="${TOUR_ANCHORS.sidebarRoleSwitcher}"]`,
         popover: {
-          title: 'Switch roles',
-          description: 'Preview the app as an Admin, Designer, or Form Filler — each sees a different set of tools.',
+          title: 'Your role',
+          description: 'Your role in this organization is shown here. Ask an Admin to invite you again with a different role if you need broader access.',
         },
       },
       {
