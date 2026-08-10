@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-10
 **Status:** Approved
-**Database:** Supabase (Postgres) — new, separate from the existing MSSQL app database
+**Database:** Supabase (Postgres). As of a mid-plan addendum (Task 2.5 in the implementation plan), the app's existing data tables also live here — migrated from MSSQL, schema and queries only, no data copied.
 
 ---
 
@@ -16,7 +16,7 @@ This spec adds:
 - A signup flow that either creates a new org (org creator becomes `Admin`) or joins an existing org via an invite link that carries a pre-set role
 - Server-side enforcement of `role`, replacing the client-only `RoleGuard`
 
-**This spec does not migrate existing app data** (`pdf_templates`, `template_versions`, submissions, assets, letterheads, waitlist) off MSSQL. That is a separate, later project. This spec only adds new tables in Supabase's Postgres for auth/orgs/roles/invites.
+**Addendum (decided during implementation, not in the original brainstorm):** this spec originally deferred migrating existing app data (`pdf_templates`, `template_versions`, submissions, assets, letterheads, waitlist) off MSSQL to a separate later project. That was brought forward mid-implementation, after the remote MSSQL dev server proved intermittently unreachable and was blocking verification — those tables now live on the same Supabase Postgres project too (schema and queries only, no existing data copied; `server/src/db.ts` was rewritten from `mssql` to `pg`). File storage for `company_assets` is unaffected — still local disk, only the DB layer changed.
 
 ---
 
@@ -108,7 +108,7 @@ organizations
 - New Express middleware verifies the Supabase-issued JWT from the `Authorization: Bearer <token>` header via `supabaseAdmin.auth.getUser(token)` (delegates verification to Supabase's own Auth server, so it works regardless of signing algorithm — see "JWT verification" decision below) and attaches `{ userId, orgId, role }` to `req`.
 - Applied to all routes that are currently only guarded client-side by `RoleGuard` with `allowed={['Admin', 'Designer']}`: templates gallery, template create/edit, assets, letterheads, submissions-list. The server-side check mirrors the client's allow-list.
 - Routes that stay public/unauthenticated (unchanged): `/health`, `/waitlist`, `/templates/:id/fill` (and the POST endpoints it depends on to submit/generate a filled PDF) — these are used by external recipients who don't have accounts.
-- Because the app tables (`pdf_templates`, etc.) still live in MSSQL in this spec, the new middleware does not yet scope *those* queries by `org_id` — there's only one tenant's worth of app data today. Org-scoping the app data itself happens when those tables move to Supabase Postgres in the follow-up project.
+- The app tables (`pdf_templates`, etc.) now live in the same Supabase Postgres project (per the addendum above), but the middleware still does not scope those queries by `org_id` — there's only one tenant's worth of app data today, and adding multi-tenant scoping to those tables is a separate, unrequested change beyond "move the tables and keep behavior identical."
 
 ---
 
@@ -144,7 +144,7 @@ supabase/migrations/
 
 ## Out of Scope
 
-- Migrating `pdf_templates`, `template_versions`, submissions, assets, letterheads, waitlist off MSSQL (separate follow-up project)
+- ~~Migrating `pdf_templates`, `template_versions`, submissions, assets, letterheads, waitlist off MSSQL~~ — brought forward mid-implementation, see the addendum above; still out of scope: copying existing MSSQL *data* (schema/queries only), and moving `company_assets` file storage to Supabase Storage (stays on local disk).
 - Multiple organizations per user / org switching
 - Email/password sign-in, password reset
 - Email-based invites (only shareable link/code)

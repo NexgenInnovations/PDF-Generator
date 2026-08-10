@@ -4,7 +4,7 @@
 
 **Goal:** Replace the app's fake, self-selected `localStorage` role with real Supabase Auth (Google OAuth only), a genuine `organizations`/`profiles`/`invites` data model (one org per user, invite-only joining with an inviter-set role), and server-side role enforcement.
 
-**Architecture:** A local Supabase project (Postgres + GoTrue Auth, run via the Supabase CLI, Docker) holds three new tables (`organizations`, `profiles`, `invites`). The existing Express server gets a new `/auth` router plus JWT-verifying middleware, and applies role checks to the routes that were previously only guarded client-side. The existing React client gets a new `AuthContext` (replacing `RoleContext`), a `/login` page, an `/onboarding` (+ `/join/:code`) flow, and route guards. `pdf_templates`/submissions/assets/letterheads/waitlist stay on MSSQL — untouched by this plan.
+**Architecture:** A local Supabase project (Postgres + GoTrue Auth, run via the Supabase CLI, Docker) holds three new tables (`organizations`, `profiles`, `invites`) plus, as of Task 2.5, the app's existing data tables (`pdf_templates`, `template_versions`, `filled_submissions`, `generated_pdfs`, `company_assets`, `letterheads`, `signature_events`, `waitlist_signups`) migrated from MSSQL — schema and queries only, no data copied. The existing Express server gets a new `/auth` router plus token-verifying middleware, has its data layer (`server/src/db.ts`) rewritten from `mssql` to `pg` against the same Supabase Postgres instance, and applies role checks to the routes that were previously only guarded client-side. The existing React client gets a new `AuthContext` (replacing `RoleContext`), a `/login` page, an `/onboarding` (+ `/join/:code`) flow, and route guards.
 
 **Tech Stack:** Supabase CLI (`supabase` — local Postgres 17 + GoTrue Auth via Docker), `@supabase/supabase-js` (client + server; server-side token verification goes through `supabaseAdmin.auth.getUser()`, not a local JWT-secret check — see Task 2), Express, React Router.
 
@@ -16,6 +16,7 @@
 - One organization per user. Google OAuth is the only sign-in method (no email/password in the app itself — a password is used internally only for the dev test-user script in Task 2, never exposed to real users). Roles are exactly `Admin` / `Designer` / `FormFiller` (reused verbatim from the existing `Role` type). Joining an org is invite-only; the invite fixes the joiner's role, which they confirm but cannot change. Invites are shareable links/codes, not emails.
 - `GET /templates/:id`, `POST /generate-pdf` (and the whole `/templates/:id/fill` page) stay fully public/unauthenticated — used by external recipients who don't have accounts. Nothing in this plan adds auth to them.
 - New Supabase migrations live in `supabase/migrations/`, separate from the pre-existing (unused-by-MSSQL) `server/migrations/*.sql` files — do not touch those.
+- As of Task 2.5 (added mid-plan by explicit human decision): the app's existing data tables move from MSSQL to the same local Supabase Postgres project — schema and queries only, no existing MSSQL data is copied. This removed a real blocker (the remote MSSQL dev server was intermittently unreachable over VPN, blocking every task's server verification). File storage for `company_assets` is unaffected — still local disk, only the DB layer changes.
 
 ---
 
@@ -615,6 +616,764 @@ git add server/package.json server/package-lock.json server/src/lib/supabaseAdmi
   server/src/middleware/auth.ts server/src/routes/auth.ts server/src/index.ts \
   server/scripts/mint-test-token.ts .env.example supabase/migrations/0005_enable_rls.sql
 git commit -m "feat(server): add Supabase auth middleware and /auth routes for orgs/invites"
+```
+
+---
+
+### Task 2.5: Migrate app data schema and queries from MSSQL to Supabase Postgres
+
+**Added mid-plan, by explicit human decision, after Task 2.** The original plan deferred migrating `pdf_templates`/`template_versions`/`filled_submissions`/`generated_pdfs`/`company_assets`/`letterheads`/`signature_events`/`waitlist_signups` off MSSQL to a separate later project. The human decided to bring that forward now: create the equivalent tables on the same local Supabase Postgres project (schema only — no data copied, since there's nothing worth preserving in the current MSSQL dev data), and rewire `server/src/db.ts` to query Postgres instead of MSSQL. This removes the app's dependency on the remote MSSQL server entirely (it was intermittently unreachable over VPN, blocking verification).
+
+**Scope boundary:** this migrates the *database* layer only. File storage for `company_assets` stays exactly as-is — local disk (`server/assets/`), with only the path recorded in the DB, same as today. Moving that to Supabase Storage is a separate, unrequested change and is out of scope here.
+
+**Files:**
+- Create: `supabase/migrations/0006_create_pdf_templates.sql` through `0013_create_waitlist_signups.sql` (one file per table, matching Task 1's per-table convention)
+- Modify: `server/src/db.ts` (full rewrite: `mssql` → `pg`)
+- Modify: `server/src/routes/templates.ts` (the one place outside `db.ts` that inspects an MSSQL-specific error shape)
+- Modify: `server/package.json` (remove `mssql`, `@types/mssql`; add `pg`, `@types/pg`)
+- Modify: root `.env.example` and `server/.env` (remove `DB_SERVER`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`/`DB_ENCRYPT`/`DB_TRUST_CERT`/`DB_POOL_MIN`/`DB_POOL_MAX`; add `SUPABASE_DB_URL`)
+
+**Interfaces:**
+- Consumes: the local Supabase Postgres instance from Task 1 (same project, same `npx supabase status` "DB URL").
+- Produces: every `db.ts` export keeps its **exact current name, parameter types, and return shape** — Task 3 (which comes next) adds auth middleware to the route files that call these functions, and does not touch `db.ts` at all. No route file other than `templates.ts`'s one error-code check should need to change.
+
+- [ ] **Step 1: Read the current `server/src/db.ts` in full before deleting anything**
+
+Open `server/src/db.ts` and note the exact TypeScript parameter and return types on every exported function (`TemplateRow`, `TemplateVersionRow`, `FilledSubmissionRow`, `GeneratedPdfRow`, `CompanyAssetRow`, `LetterheadRow`/`LetterheadSummaryRow`, `SignatureEventRow`, and every function signature). The rewrite below preserves the same shapes, but confirm against the real file — if anything here doesn't match what a route file actually imports/expects, match the real file, not this brief, and note the discrepancy in your report.
+
+- [ ] **Step 2: Create the Postgres migrations**
+
+One file per table, `supabase/migrations/`, continuing Task 1's numbering:
+
+`0006_create_pdf_templates.sql`:
+```sql
+create table pdf_templates (
+  id              uuid primary key default gen_random_uuid(),
+  name            text not null,
+  current_version integer not null default 0,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+```
+
+`0007_create_template_versions.sql`:
+```sql
+create table template_versions (
+  id          uuid primary key default gen_random_uuid(),
+  template_id uuid not null references pdf_templates(id) on delete cascade,
+  version     integer not null,
+  status      text not null default 'published',
+  tag         text,
+  schema      text not null,
+  base_pdf    text not null,
+  schemas     text not null,
+  created_at  timestamptz not null default now(),
+  constraint uq_template_version unique (template_id, version)
+);
+
+create unique index uq_template_versions_tag
+  on template_versions (template_id, tag)
+  where status = 'published';
+```
+
+`0008_create_filled_submissions.sql`:
+```sql
+create table filled_submissions (
+  id               uuid primary key default gen_random_uuid(),
+  template_id      uuid not null references pdf_templates(id) on delete cascade,
+  template_version integer not null,
+  inputs           text not null,
+  submitted_at     timestamptz not null default now()
+);
+```
+
+`0009_create_generated_pdfs.sql` (no `on delete cascade` on either FK — matches the current MSSQL schema's behavior exactly, do not add cascade here even though it looks inconsistent with the two tables above; that inconsistency already exists in production behavior and changing it is out of scope):
+```sql
+create table generated_pdfs (
+  id               uuid primary key default gen_random_uuid(),
+  submission_id    uuid not null references filled_submissions(id),
+  template_id      uuid not null references pdf_templates(id),
+  template_version integer not null,
+  inputs_snapshot  text not null,
+  schema_snapshot  text not null,
+  file_path        text not null,
+  file_size_bytes  bigint,
+  generated_at     timestamptz not null default now()
+);
+```
+
+`0010_create_company_assets.sql`:
+```sql
+create table company_assets (
+  id               uuid primary key default gen_random_uuid(),
+  name             text not null,
+  file_path        text not null,
+  mime_type        text not null,
+  file_size_bytes  bigint not null,
+  created_at       timestamptz not null default now()
+);
+```
+
+`0011_create_letterheads.sql` (this models the table's current *effective* live shape in MSSQL, i.e. after all of `db.ts`'s historical `ALTER TABLE` migrations are accounted for — not its original `CREATE TABLE` — so `static_schema`/`page_width`/`page_height` are nullable and `base_pdf`/`type` already exist):
+```sql
+create table letterheads (
+  id            uuid primary key default gen_random_uuid(),
+  name          text not null,
+  type          text not null default 'fields',
+  static_schema text,
+  page_width    double precision,
+  page_height   double precision,
+  base_pdf      text,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+```
+
+`0012_create_signature_events.sql`:
+```sql
+create table signature_events (
+  id            uuid primary key default gen_random_uuid(),
+  submission_id uuid not null references filled_submissions(id),
+  field_name    text not null,
+  signer_name   text not null,
+  signer_email  text not null,
+  signed_at     timestamptz not null default now(),
+  ip_address    text,
+  document_hash text not null
+);
+```
+
+`0013_create_waitlist_signups.sql`:
+```sql
+create table waitlist_signups (
+  id         integer generated always as identity primary key,
+  name       text not null,
+  email      text not null unique,
+  created_at timestamptz not null default now()
+);
+```
+
+None of these 8 tables get RLS enabled or any grants to `anon`/`authenticated`/`service_role`. Unlike `organizations`/`profiles`/`invites` (Task 1), these tables are never queried through PostgREST/`supabase-js` — the server connects to Postgres directly via the `pg` package using the `postgres` superuser connection string, which bypasses RLS and has full privileges by default. Adding RLS here would be unused complexity.
+
+Apply: `npx supabase db reset` (replays all 13 migrations from a clean database).
+
+- [ ] **Step 3: Swap the server dependency**
+
+```bash
+npm --prefix server uninstall mssql @types/mssql
+npm --prefix server install pg
+npm --prefix server install -D @types/pg
+```
+
+- [ ] **Step 4: Update env vars**
+
+In root `.env.example`, remove the entire `# MSSQL` block (`DB_SERVER` through `DB_POOL_MAX`) and add, next to the existing Supabase vars:
+
+```
+SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+```
+
+In `server/.env`, remove the same MSSQL vars and add `SUPABASE_DB_URL` with the real value from `npx supabase status` ("DB URL").
+
+- [ ] **Step 5: Rewrite `server/src/db.ts`**
+
+Replace the entire file. Preserve every exported function's name and (per Step 1) parameter/return types exactly — route files must not need to change except where noted in Step 6.
+
+```ts
+// server/src/db.ts
+import pg from 'pg';
+
+const { Pool } = pg;
+
+const pool = new Pool({
+  connectionString: process.env.SUPABASE_DB_URL ?? '',
+});
+
+export async function initDb(): Promise<void> {
+  await pool.query('select 1');
+  console.log('Connected to Postgres (Supabase)');
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: string }).code === '23505';
+}
+
+// ---------- pdf_templates ----------
+
+export interface TemplateRow {
+  id: string;
+  name: string;
+  current_version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function listTemplates(): Promise<TemplateRow[]> {
+  const { rows } = await pool.query<TemplateRow>(
+    `SELECT id, name, current_version, created_at, updated_at FROM pdf_templates ORDER BY created_at DESC`
+  );
+  return rows;
+}
+
+export async function getTemplate(id: string): Promise<TemplateRow | null> {
+  const { rows } = await pool.query<TemplateRow>(
+    `SELECT id, name, current_version, created_at, updated_at FROM pdf_templates WHERE id = $1`,
+    [id]
+  );
+  return rows[0] ?? null;
+}
+
+export async function createTemplate(name: string): Promise<TemplateRow> {
+  const { rows } = await pool.query<TemplateRow>(`INSERT INTO pdf_templates (name) VALUES ($1) RETURNING *`, [name]);
+  return rows[0];
+}
+
+export async function updateTemplate(id: string, name: string): Promise<TemplateRow | null> {
+  const { rows } = await pool.query<TemplateRow>(
+    `UPDATE pdf_templates SET name = $1, updated_at = now() WHERE id = $2 RETURNING *`,
+    [name, id]
+  );
+  return rows[0] ?? null;
+}
+
+export async function deleteTemplate(id: string): Promise<void> {
+  await pool.query(`DELETE FROM pdf_templates WHERE id = $1`, [id]);
+}
+
+// ---------- template_versions ----------
+
+export interface TemplateVersionRow {
+  id: string;
+  template_id: string;
+  version: number;
+  status: string;
+  tag: string | null;
+  schema: unknown;
+  base_pdf: unknown;
+  schemas: unknown;
+  created_at: string;
+}
+
+interface TemplateVersionDbRow {
+  id: string;
+  template_id: string;
+  version: number;
+  status: string;
+  tag: string | null;
+  schema: string;
+  base_pdf: string;
+  schemas: string;
+  created_at: string;
+}
+
+function parseVersionRow(row: TemplateVersionDbRow): TemplateVersionRow {
+  return { ...row, schema: JSON.parse(row.schema), base_pdf: JSON.parse(row.base_pdf), schemas: JSON.parse(row.schemas) };
+}
+
+export async function saveDraft(templateId: string, schema: unknown): Promise<TemplateVersionRow> {
+  const schemaObj = schema as { basePdf: unknown; schemas: unknown };
+  const schemaStr = JSON.stringify(schema);
+  const basePdfStr = JSON.stringify(schemaObj.basePdf);
+  const schemasStr = JSON.stringify(schemaObj.schemas);
+
+  const { rows: existing } = await pool.query<{ id: string }>(
+    `SELECT id FROM template_versions WHERE template_id = $1 AND status = 'draft'`,
+    [templateId]
+  );
+
+  if (existing[0]) {
+    const { rows } = await pool.query<TemplateVersionDbRow>(
+      `UPDATE template_versions SET schema = $1, base_pdf = $2, schemas = $3, created_at = now() WHERE id = $4 RETURNING *`,
+      [schemaStr, basePdfStr, schemasStr, existing[0].id]
+    );
+    return parseVersionRow(rows[0]);
+  }
+
+  const { rows: templateRows } = await pool.query(`SELECT id FROM pdf_templates WHERE id = $1`, [templateId]);
+  if (!templateRows[0]) throw new Error('Template not found');
+
+  const { rows } = await pool.query<TemplateVersionDbRow>(
+    `INSERT INTO template_versions (template_id, version, status, tag, schema, base_pdf, schemas)
+     VALUES ($1, 0, 'draft', NULL, $2, $3, $4) RETURNING *`,
+    [templateId, schemaStr, basePdfStr, schemasStr]
+  );
+  return parseVersionRow(rows[0]);
+}
+
+export async function getDraft(templateId: string): Promise<TemplateVersionRow | null> {
+  const { rows } = await pool.query<TemplateVersionDbRow>(
+    `SELECT * FROM template_versions WHERE template_id = $1 AND status = 'draft'`,
+    [templateId]
+  );
+  return rows[0] ? parseVersionRow(rows[0]) : null;
+}
+
+export type PublishTarget = { mode: 'new' } | { mode: 'replace'; version: number };
+
+export async function publishVersion(
+  templateId: string,
+  schema: unknown,
+  tag: string | null,
+  target: PublishTarget
+): Promise<TemplateVersionRow> {
+  const schemaObj = schema as { basePdf: unknown; schemas: unknown };
+  const schemaStr = JSON.stringify(schema);
+  const basePdfStr = JSON.stringify(schemaObj.basePdf);
+  const schemasStr = JSON.stringify(schemaObj.schemas);
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    let row: TemplateVersionDbRow;
+    if (target.mode === 'new') {
+      const { rows: updated } = await client.query<{ current_version: number }>(
+        `UPDATE pdf_templates SET current_version = current_version + 1, updated_at = now() WHERE id = $1 RETURNING current_version`,
+        [templateId]
+      );
+      if (!updated[0]) throw new Error('Template not found');
+      const version = updated[0].current_version;
+
+      const { rows } = await client.query<TemplateVersionDbRow>(
+        `INSERT INTO template_versions (template_id, version, status, tag, schema, base_pdf, schemas)
+         VALUES ($1, $2, 'published', $3, $4, $5, $6) RETURNING *`,
+        [templateId, version, tag, schemaStr, basePdfStr, schemasStr]
+      );
+      row = rows[0];
+    } else {
+      const { rows } = await client.query<TemplateVersionDbRow>(
+        `UPDATE template_versions SET tag = $1, schema = $2, base_pdf = $3, schemas = $4, created_at = now()
+         WHERE template_id = $5 AND version = $6 AND status = 'published' RETURNING *`,
+        [tag, schemaStr, basePdfStr, schemasStr, templateId, target.version]
+      );
+      if (!rows[0]) throw new Error('Published version not found');
+      row = rows[0];
+    }
+
+    await client.query('COMMIT');
+    return parseVersionRow(row);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function listPublishedVersions(templateId: string): Promise<TemplateVersionRow[]> {
+  const { rows } = await pool.query<TemplateVersionDbRow>(
+    `SELECT * FROM template_versions WHERE template_id = $1 AND status = 'published' ORDER BY version DESC`,
+    [templateId]
+  );
+  return rows.map(parseVersionRow);
+}
+
+export type VersionRef = { version: number } | { tag: string };
+
+export async function getPublishedVersion(templateId: string, ref: VersionRef): Promise<TemplateVersionRow | null> {
+  const { rows } =
+    'version' in ref
+      ? await pool.query<TemplateVersionDbRow>(
+          `SELECT * FROM template_versions WHERE template_id = $1 AND version = $2 AND status = 'published'`,
+          [templateId, ref.version]
+        )
+      : await pool.query<TemplateVersionDbRow>(
+          `SELECT * FROM template_versions WHERE template_id = $1 AND tag = $2 AND status = 'published'`,
+          [templateId, ref.tag]
+        );
+  return rows[0] ? parseVersionRow(rows[0]) : null;
+}
+
+export async function getLatestPublishedVersion(templateId: string): Promise<TemplateVersionRow | null> {
+  const { rows } = await pool.query<TemplateVersionDbRow>(
+    `SELECT * FROM template_versions WHERE template_id = $1 AND status = 'published' ORDER BY version DESC LIMIT 1`,
+    [templateId]
+  );
+  return rows[0] ? parseVersionRow(rows[0]) : null;
+}
+
+// ---------- filled_submissions ----------
+
+export interface FilledSubmissionRow {
+  id: string;
+  template_id: string;
+  template_version: number;
+  inputs: unknown;
+  submitted_at: string;
+}
+
+interface FilledSubmissionDbRow extends Omit<FilledSubmissionRow, 'inputs'> {
+  inputs: string;
+}
+
+export async function createFilledSubmission(
+  templateId: string,
+  templateVersion: number,
+  inputs: unknown
+): Promise<FilledSubmissionRow> {
+  const { rows } = await pool.query<FilledSubmissionDbRow>(
+    `INSERT INTO filled_submissions (template_id, template_version, inputs) VALUES ($1, $2, $3) RETURNING *`,
+    [templateId, templateVersion, JSON.stringify(inputs)]
+  );
+  return { ...rows[0], inputs: JSON.parse(rows[0].inputs) };
+}
+
+export async function listSubmissionsForTemplate(templateId: string): Promise<FilledSubmissionRow[]> {
+  const { rows } = await pool.query<FilledSubmissionDbRow>(
+    `SELECT * FROM filled_submissions WHERE template_id = $1 ORDER BY submitted_at DESC`,
+    [templateId]
+  );
+  return rows.map((row) => ({ ...row, inputs: JSON.parse(row.inputs) }));
+}
+
+export async function getFilledSubmission(id: string): Promise<FilledSubmissionRow | null> {
+  const { rows } = await pool.query<FilledSubmissionDbRow>(`SELECT * FROM filled_submissions WHERE id = $1`, [id]);
+  return rows[0] ? { ...rows[0], inputs: JSON.parse(rows[0].inputs) } : null;
+}
+
+// ---------- generated_pdfs ----------
+
+export interface GeneratedPdfRow {
+  id: string;
+  submission_id: string;
+  template_id: string;
+  template_version: number;
+  inputs_snapshot: unknown;
+  schema_snapshot: unknown;
+  file_path: string;
+  file_size_bytes: number | null;
+  generated_at: string;
+}
+
+interface GeneratedPdfDbRow extends Omit<GeneratedPdfRow, 'inputs_snapshot' | 'schema_snapshot'> {
+  inputs_snapshot: string;
+  schema_snapshot: string;
+}
+
+export async function createGeneratedPdf(opts: {
+  submissionId: string;
+  templateId: string;
+  templateVersion: number;
+  inputsSnapshot: unknown;
+  schemaSnapshot: unknown;
+  filePath: string;
+  fileSizeBytes?: number;
+}): Promise<GeneratedPdfRow> {
+  const { rows } = await pool.query<GeneratedPdfDbRow>(
+    `INSERT INTO generated_pdfs
+       (submission_id, template_id, template_version, inputs_snapshot, schema_snapshot, file_path, file_size_bytes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [
+      opts.submissionId,
+      opts.templateId,
+      opts.templateVersion,
+      JSON.stringify(opts.inputsSnapshot),
+      JSON.stringify(opts.schemaSnapshot),
+      opts.filePath,
+      opts.fileSizeBytes ?? null,
+    ]
+  );
+  const row = rows[0];
+  return { ...row, inputs_snapshot: JSON.parse(row.inputs_snapshot), schema_snapshot: JSON.parse(row.schema_snapshot) };
+}
+
+// ---------- company_assets ----------
+
+export interface CompanyAssetRow {
+  id: string;
+  name: string;
+  file_path: string;
+  mime_type: string;
+  file_size_bytes: number;
+  created_at: string;
+}
+
+export async function listAssets(): Promise<CompanyAssetRow[]> {
+  const { rows } = await pool.query<CompanyAssetRow>(
+    `SELECT id, name, file_path, mime_type, file_size_bytes, created_at FROM company_assets ORDER BY created_at DESC`
+  );
+  return rows;
+}
+
+export async function getAsset(id: string): Promise<CompanyAssetRow | null> {
+  const { rows } = await pool.query<CompanyAssetRow>(`SELECT * FROM company_assets WHERE id = $1`, [id]);
+  return rows[0] ?? null;
+}
+
+export async function createAsset(input: {
+  name: string;
+  filePath: string;
+  mimeType: string;
+  fileSizeBytes: number;
+}): Promise<CompanyAssetRow> {
+  const { rows } = await pool.query<CompanyAssetRow>(
+    `INSERT INTO company_assets (name, file_path, mime_type, file_size_bytes) VALUES ($1, $2, $3, $4) RETURNING *`,
+    [input.name, input.filePath, input.mimeType, input.fileSizeBytes]
+  );
+  return rows[0];
+}
+
+export async function deleteAsset(id: string): Promise<CompanyAssetRow | null> {
+  const { rows } = await pool.query<CompanyAssetRow>(`DELETE FROM company_assets WHERE id = $1 RETURNING *`, [id]);
+  return rows[0] ?? null;
+}
+
+// ---------- letterheads ----------
+
+export interface LetterheadSummaryRow {
+  id: string;
+  name: string;
+  type: string;
+  page_width: number | null;
+  page_height: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LetterheadRow extends LetterheadSummaryRow {
+  static_schema: unknown | null;
+  base_pdf: string | null;
+}
+
+interface LetterheadDbRow extends Omit<LetterheadRow, 'static_schema'> {
+  static_schema: string | null;
+}
+
+function parseLetterheadRow(row: LetterheadDbRow): LetterheadRow {
+  return { ...row, static_schema: row.static_schema ? JSON.parse(row.static_schema) : null };
+}
+
+export async function listLetterheads(): Promise<LetterheadSummaryRow[]> {
+  const { rows } = await pool.query<LetterheadSummaryRow>(
+    `SELECT id, name, type, page_width, page_height, created_at, updated_at FROM letterheads ORDER BY updated_at DESC`
+  );
+  return rows;
+}
+
+export async function getLetterhead(id: string): Promise<LetterheadRow | null> {
+  const { rows } = await pool.query<LetterheadDbRow>(
+    `SELECT id, name, type, static_schema, page_width, page_height, base_pdf, created_at, updated_at FROM letterheads WHERE id = $1`,
+    [id]
+  );
+  return rows[0] ? parseLetterheadRow(rows[0]) : null;
+}
+
+export async function createLetterhead(input: {
+  name: string;
+  type: 'fields' | 'pdf';
+  staticSchema?: unknown;
+  pageWidth?: number;
+  pageHeight?: number;
+  basePdf?: string;
+}): Promise<LetterheadRow> {
+  const { rows } = await pool.query<LetterheadDbRow>(
+    `INSERT INTO letterheads (name, type, static_schema, page_width, page_height, base_pdf)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id, name, type, static_schema, page_width, page_height, base_pdf, created_at, updated_at`,
+    [
+      input.name,
+      input.type,
+      input.staticSchema !== undefined ? JSON.stringify(input.staticSchema) : null,
+      input.pageWidth ?? null,
+      input.pageHeight ?? null,
+      input.basePdf ?? null,
+    ]
+  );
+  return parseLetterheadRow(rows[0]);
+}
+
+export async function updateLetterhead(
+  id: string,
+  input: { name?: string; staticSchema?: unknown; pageWidth?: number; pageHeight?: number; basePdf?: string }
+): Promise<LetterheadRow | null> {
+  const existing = await getLetterhead(id);
+  if (!existing) return null;
+
+  const name = input.name ?? existing.name;
+  const staticSchema = input.staticSchema !== undefined ? input.staticSchema : existing.static_schema;
+  const pageWidth = input.pageWidth ?? existing.page_width;
+  const pageHeight = input.pageHeight ?? existing.page_height;
+  const basePdf = input.basePdf ?? existing.base_pdf;
+
+  const { rows } = await pool.query<LetterheadDbRow>(
+    `UPDATE letterheads SET name = $1, static_schema = $2, page_width = $3, page_height = $4, base_pdf = $5, updated_at = now()
+     WHERE id = $6
+     RETURNING id, name, type, static_schema, page_width, page_height, base_pdf, created_at, updated_at`,
+    [name, staticSchema !== null && staticSchema !== undefined ? JSON.stringify(staticSchema) : null, pageWidth, pageHeight, basePdf, id]
+  );
+  return rows[0] ? parseLetterheadRow(rows[0]) : null;
+}
+
+export async function deleteLetterhead(id: string): Promise<void> {
+  await pool.query(`DELETE FROM letterheads WHERE id = $1`, [id]);
+}
+
+// ---------- signature_events ----------
+
+export interface SignatureEventRow {
+  id: string;
+  submission_id: string;
+  field_name: string;
+  signer_name: string;
+  signer_email: string;
+  signed_at: string;
+  ip_address: string | null;
+  document_hash: string;
+}
+
+export async function createSignatureEvent(input: {
+  submissionId: string;
+  fieldName: string;
+  signerName: string;
+  signerEmail: string;
+  ipAddress: string | null;
+  documentHash: string;
+}): Promise<SignatureEventRow> {
+  const { rows } = await pool.query<SignatureEventRow>(
+    `INSERT INTO signature_events (submission_id, field_name, signer_name, signer_email, ip_address, document_hash)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [input.submissionId, input.fieldName, input.signerName, input.signerEmail, input.ipAddress, input.documentHash]
+  );
+  return rows[0];
+}
+
+export async function listSignatureEventsForSubmission(submissionId: string): Promise<SignatureEventRow[]> {
+  const { rows } = await pool.query<SignatureEventRow>(
+    `SELECT * FROM signature_events WHERE submission_id = $1 ORDER BY signed_at ASC`,
+    [submissionId]
+  );
+  return rows;
+}
+
+// ---------- waitlist_signups ----------
+
+export async function createWaitlistSignup(name: string, email: string): Promise<{ alreadyOnList: boolean }> {
+  try {
+    await pool.query(`INSERT INTO waitlist_signups (name, email) VALUES ($1, $2)`, [name, email]);
+    return { alreadyOnList: false };
+  } catch (error) {
+    if (isUniqueViolation(error)) return { alreadyOnList: true };
+    throw error;
+  }
+}
+```
+
+Notes on fidelity to the original:
+- `listFilledSubmissions` (a duplicate of `listSubmissionsForTemplate`, same query, confirmed unused by any route) is intentionally dropped — if you find a live caller of it that Step 1 didn't catch, add it back with the same query instead of leaving an import error.
+- `generated_pdfs`/`signature_events` foreign keys intentionally have no `ON DELETE` clause, matching the original MSSQL schema's (inconsistent, but current) behavior — do not add cascades here.
+- The `updateLetterhead` read-then-write pattern (not a single atomic statement) is preserved as-is — this is an existing, documented behavior, not something to fix as part of this migration.
+
+- [ ] **Step 6: Fix the one MSSQL-specific error check outside `db.ts`**
+
+In `server/src/routes/templates.ts`, the `POST /:id/publish` handler catches a duplicate-tag violation by inspecting an MSSQL-specific error shape (`(error as { number?: number }).number === 2601 || ... === 2627`). Find that check and replace it with the Postgres equivalent — `(error as { code?: string }).code === '23505'` — keeping the same 409 response behavior around it. Do not change anything else in this file; this is the only MSSQL-specific code outside `db.ts`, per the mapping this task was based on.
+
+- [ ] **Step 7: Build check**
+
+```bash
+npm --prefix server run build
+```
+
+Expected: clean, no errors. If there are type errors, they most likely mean a route file expects a `db.ts` export shape that drifted from Step 1's real signatures — fix `db.ts` to match the real, pre-existing route usage, not the other way around.
+
+- [ ] **Step 8: Start the server and verify each table end-to-end**
+
+```bash
+npm --prefix server run dev
+```
+
+Expected: `Connected to Postgres (Supabase)` and `Server running on port 3004`, no MSSQL-related output at all.
+
+Run this sequence, confirming each step's shape/status code:
+
+```bash
+# Create a template (uses pdf_templates + template_versions draft path)
+curl -s -X POST http://localhost:3004/templates \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Migration Test","schema":{"basePdf":{"width":210,"height":297,"padding":[0,0,0,0]},"schemas":[[]]}}'
+```
+Expected: 200, a JSON template row with a `draft` object.
+
+```bash
+# List templates
+curl -s http://localhost:3004/templates
+```
+Expected: 200, array including the template just created.
+
+```bash
+# Publish it (exercises the transaction in publishVersion)
+curl -s -X POST http://localhost:3004/templates/<id>/publish \
+  -H 'Content-Type: application/json' \
+  -d '{"schema":{"basePdf":{"width":210,"height":297,"padding":[0,0,0,0]},"schemas":[[]]},"tag":"v1","mode":"new"}'
+```
+Expected: 200, `{"schema":{...},"version":1,"tag":"v1"}`.
+
+```bash
+# Publish the same tag again to trigger the 409 path (exercises Step 6's fix)
+curl -s -o /dev/null -w '%{http_code}\n' -X POST http://localhost:3004/templates/<id>/publish \
+  -H 'Content-Type: application/json' \
+  -d '{"schema":{"basePdf":{"width":210,"height":297,"padding":[0,0,0,0]},"schemas":[[]]},"tag":"v1","mode":"new"}'
+```
+Expected: `409`.
+
+```bash
+# Generate a filled PDF (exercises filled_submissions + generated_pdfs)
+curl -s -o /tmp/migration-test.pdf -w '%{http_code}\n' -X POST http://localhost:3004/generate-pdf \
+  -H 'Content-Type: application/json' \
+  -d '{"template_id":"<id>","inputs":[{}],"tag":"v1"}'
+```
+Expected: `200`, and `/tmp/migration-test.pdf` is a non-empty file (`file /tmp/migration-test.pdf` reports PDF document).
+
+```bash
+# List submissions for the template (exercises the submissions route + signature_events join)
+curl -s http://localhost:3004/templates/<id>/submissions
+```
+Expected: 200, array with one submission, `signatureEvents: []`.
+
+```bash
+# Company assets round-trip
+curl -s -X POST http://localhost:3004/assets -F "file=@/tmp/migration-test.pdf;type=application/pdf" -F "name=Test Asset"
+curl -s http://localhost:3004/assets
+```
+Expected: both 200; the list includes the created asset.
+
+```bash
+# Letterheads round-trip
+curl -s -X POST http://localhost:3004/letterheads \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Test Letterhead","type":"fields","staticSchema":[],"pageWidth":210,"pageHeight":297}'
+curl -s http://localhost:3004/letterheads
+```
+Expected: both 200; the list includes the created letterhead.
+
+```bash
+# Waitlist (exercises the unique-violation → alreadyOnList path)
+curl -s -X POST http://localhost:3004/waitlist -H 'Content-Type: application/json' -d '{"name":"Test","email":"migration-test@example.com"}'
+curl -s -X POST http://localhost:3004/waitlist -H 'Content-Type: application/json' -d '{"name":"Test","email":"migration-test@example.com"}'
+```
+Expected: first `{"alreadyOnList":false}`, second `{"alreadyOnList":true}` — both HTTP 200.
+
+- [ ] **Step 9: Delete the template created for verification (cleanup, exercises `deleteTemplate` + cascade)**
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -X DELETE http://localhost:3004/templates/<id>
+```
+Expected: matches whatever status the existing delete handler already returns on success (confirm from the route file, don't assume). Then confirm the child `template_versions`/`filled_submissions` rows are gone too (cascade):
+
+```bash
+PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -c \
+  "select count(*) from template_versions where template_id = '<id>'; select count(*) from filled_submissions where template_id = '<id>';"
+```
+Expected: both `0`.
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add supabase/migrations/0006_create_pdf_templates.sql supabase/migrations/0007_create_template_versions.sql \
+  supabase/migrations/0008_create_filled_submissions.sql supabase/migrations/0009_create_generated_pdfs.sql \
+  supabase/migrations/0010_create_company_assets.sql supabase/migrations/0011_create_letterheads.sql \
+  supabase/migrations/0012_create_signature_events.sql supabase/migrations/0013_create_waitlist_signups.sql \
+  server/src/db.ts server/src/routes/templates.ts server/package.json server/package-lock.json .env.example
+git commit -m "feat(server): migrate app data schema and queries from MSSQL to Supabase Postgres"
 ```
 
 ---
