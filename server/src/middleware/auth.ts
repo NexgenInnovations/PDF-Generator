@@ -1,5 +1,4 @@
 import type { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
 import { supabaseAdmin } from '../lib/supabaseAdmin.js';
 
 export type Role = 'Admin' | 'Designer' | 'FormFiller';
@@ -7,8 +6,6 @@ export type Role = 'Admin' | 'Designer' | 'FormFiller';
 export interface AuthedRequest extends Request {
   auth?: { userId: string; orgId: string | null; role: Role | null };
 }
-
-const JWT_SECRET = process.env.SUPABASE_JWT_SECRET ?? '';
 
 export async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
   const header = req.header('authorization') ?? '';
@@ -18,19 +15,12 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
     return;
   }
 
-  let payload: jwt.JwtPayload;
-  try {
-    payload = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload;
-  } catch {
+  const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(token);
+  if (userError || !userData.user) {
     res.status(401).json({ error: 'Invalid or expired token' });
     return;
   }
-
-  const userId = payload.sub;
-  if (!userId) {
-    res.status(401).json({ error: 'Invalid token payload' });
-    return;
-  }
+  const userId = userData.user.id;
 
   const { data, error } = await supabaseAdmin
     .from('profiles')

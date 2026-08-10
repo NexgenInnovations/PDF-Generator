@@ -7,7 +7,7 @@
 -- REFERENCES), not SELECT/INSERT/UPDATE/DELETE, so requests fail with
 -- "permission denied for table" before RLS is ever evaluated.
 grant select, insert, update, delete on public.profiles, public.organizations, public.invites
-  to anon, authenticated;
+  to anon, authenticated, service_role;
 
 alter table profiles enable row level security;
 alter table organizations enable row level security;
