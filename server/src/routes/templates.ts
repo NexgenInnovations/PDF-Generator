@@ -294,8 +294,8 @@ templatesRouter.post('/:id/publish', async (req: Request, res: Response) => {
 
     res.json({ schema: published.schema, version: published.version, tag: published.tag });
   } catch (error) {
-    const dbError = error as { number?: number };
-    if (dbError.number === 2601 || dbError.number === 2627) {
+    const dbError = error as { code?: string };
+    if (dbError.code === '23505') {
       res.status(409).json({ error: `Tag "${(req.body as { tag?: string }).tag}" is already used for this template` });
       return;
     }
