@@ -105,7 +105,7 @@ organizations
 
 ## Server-Side Enforcement
 
-- New Express middleware verifies the Supabase-issued JWT from the `Authorization: Bearer <token>` header using Supabase's JWT secret (local verification, no network round-trip per request) and attaches `{ userId, orgId, role }` to `req`.
+- New Express middleware verifies the Supabase-issued JWT from the `Authorization: Bearer <token>` header via `supabaseAdmin.auth.getUser(token)` (delegates verification to Supabase's own Auth server, so it works regardless of signing algorithm — see "JWT verification" decision below) and attaches `{ userId, orgId, role }` to `req`.
 - Applied to all routes that are currently only guarded client-side by `RoleGuard` with `allowed={['Admin', 'Designer']}`: templates gallery, template create/edit, assets, letterheads, submissions-list. The server-side check mirrors the client's allow-list.
 - Routes that stay public/unauthenticated (unchanged): `/health`, `/waitlist`, `/templates/:id/fill` (and the POST endpoints it depends on to submit/generate a filled PDF) — these are used by external recipients who don't have accounts.
 - Because the app tables (`pdf_templates`, etc.) still live in MSSQL in this spec, the new middleware does not yet scope *those* queries by `org_id` — there's only one tenant's worth of app data today. Org-scoping the app data itself happens when those tables move to Supabase Postgres in the follow-up project.
@@ -124,7 +124,7 @@ organizations
 | `profiles.org_id`/`role` nullable together | Lets a user exist in `auth.users`/`profiles` between "signed in with Google" and "finished onboarding" without a separate onboarding-state table |
 | Reuse existing `Admin`/`Designer`/`FormFiller` roles | No new role semantics to design; just make the existing ones real and enforced |
 | `/templates/:id/fill` and its supporting routes stay unauthenticated | External form-fillers generally don't have (and shouldn't need) accounts |
-| JWT verified locally via Supabase's JWT secret | Avoids a network call to Supabase on every protected request |
+| JWT verified via `supabaseAdmin.auth.getUser(token)`, not a local shared-secret check | Originally planned as local HS256-secret verification to avoid a network call, but the local Supabase CLI signs tokens with an asymmetric ES256 key (its modern default) that a static-secret check can't verify. `getUser()` delegates verification to Supabase's own Auth server, works regardless of signing algorithm, and needs no JWT-secret env var — at the cost of one extra local network hop per authenticated request, negligible for this app's traffic. Discovered and decided during Task 2 implementation. |
 
 ---
 

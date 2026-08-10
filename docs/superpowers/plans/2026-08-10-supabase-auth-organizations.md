@@ -6,7 +6,7 @@
 
 **Architecture:** A local Supabase project (Postgres + GoTrue Auth, run via the Supabase CLI, Docker) holds three new tables (`organizations`, `profiles`, `invites`). The existing Express server gets a new `/auth` router plus JWT-verifying middleware, and applies role checks to the routes that were previously only guarded client-side. The existing React client gets a new `AuthContext` (replacing `RoleContext`), a `/login` page, an `/onboarding` (+ `/join/:code`) flow, and route guards. `pdf_templates`/submissions/assets/letterheads/waitlist stay on MSSQL — untouched by this plan.
 
-**Tech Stack:** Supabase CLI (`supabase` — local Postgres 17 + GoTrue Auth via Docker), `@supabase/supabase-js` (client + server), `jsonwebtoken` (server-side JWT verification), Express, React Router.
+**Tech Stack:** Supabase CLI (`supabase` — local Postgres 17 + GoTrue Auth via Docker), `@supabase/supabase-js` (client + server; server-side token verification goes through `supabaseAdmin.auth.getUser()`, not a local JWT-secret check — see Task 2), Express, React Router.
 
 ## Global Constraints
 
@@ -226,9 +226,10 @@ git commit -m "feat(supabase): add local Supabase project with organizations/pro
 ### Task 2: Server auth middleware + `/auth` routes
 
 **Files:**
-- Modify: `server/package.json` (add `@supabase/supabase-js`, `jsonwebtoken`, `@types/jsonwebtoken`)
+- Modify: `server/package.json` (add `@supabase/supabase-js`)
 - Modify: root `.env.example` (document new server env vars)
 - Modify: `server/.env` (real local values — not committed)
+- Modify: `supabase/migrations/0005_enable_rls.sql` (extend the existing GRANT to include `service_role` — Task 1's grant covered `anon`/`authenticated` only, but `supabaseAdmin` below authenticates as `service_role` and needs to read/write these tables too; found during Task 2 verification)
 - Create: `server/src/lib/supabaseAdmin.ts`
 - Create: `server/src/middleware/auth.ts`
 - Create: `server/src/routes/auth.ts`
@@ -236,14 +237,31 @@ git commit -m "feat(supabase): add local Supabase project with organizations/pro
 - Create: `server/scripts/mint-test-token.ts` (dev-only helper)
 
 **Interfaces:**
-- Consumes: the `profiles`/`organizations`/`invites` schema from Task 1; `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET` env vars (values from `npx supabase status`).
+- Consumes: the `profiles`/`organizations`/`invites` schema from Task 1; `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` env vars (values from `npx supabase status`).
 - Produces: `requireAuth`, `requireRole(allowed: Role[])`, and the `AuthedRequest` type from `server/src/middleware/auth.ts` — Task 3 applies these to the existing template/asset/letterhead/submission routes. `authRouter` mounted at `/auth`, exposing `POST /auth/organizations`, `GET /auth/invites/:code`, `POST /auth/invites/:code/accept`, `POST /auth/invites` — Task 5 (client `api.ts`) calls these by exact path/method/body shape below.
+
+- [ ] **Step 0: Extend Task 1's RLS grant to cover `service_role`**
+
+In `supabase/migrations/0005_enable_rls.sql`, Task 1's grant statement covers `anon, authenticated` but not `service_role` — the role this task's `supabaseAdmin` client authenticates as. Without this, every DB call in `requireAuth`/`authRouter` fails with a Postgres permission error on a freshly-seeded environment. Change:
+
+```sql
+grant select, insert, update, delete on public.profiles, public.organizations, public.invites
+  to anon, authenticated;
+```
+
+to:
+
+```sql
+grant select, insert, update, delete on public.profiles, public.organizations, public.invites
+  to anon, authenticated, service_role;
+```
+
+Apply it: `npx supabase db reset` (replays all migrations from a clean database, including this change).
 
 - [ ] **Step 1: Add server dependencies**
 
 ```bash
-npm --prefix server install @supabase/supabase-js jsonwebtoken
-npm --prefix server install -D @types/jsonwebtoken
+npm --prefix server install @supabase/supabase-js
 ```
 
 - [ ] **Step 2: Add env vars**
@@ -254,10 +272,9 @@ Append to root `.env.example`:
 # Supabase (values from `npx supabase status`)
 SUPABASE_URL=http://127.0.0.1:54321
 SUPABASE_SERVICE_ROLE_KEY=
-SUPABASE_JWT_SECRET=
 ```
 
-Append the same three keys, filled in with real values from `npx supabase status`, to `server/.env`.
+Append the same two keys, filled in with real values from `npx supabase status`, to `server/.env`.
 
 - [ ] **Step 3: Create the Supabase admin client**
 
@@ -276,11 +293,10 @@ export const supabaseAdmin = createClient(url, serviceRoleKey, {
 
 - [ ] **Step 4: Create the auth middleware**
 
-Create `server/src/middleware/auth.ts`:
+Create `server/src/middleware/auth.ts`. Token verification goes through `supabaseAdmin.auth.getUser(token)` rather than a local shared-secret check — the local Supabase CLI signs tokens with an asymmetric key by default, which a static-secret `jsonwebtoken` check cannot verify; `getUser()` delegates verification to Supabase's own Auth server and works regardless of signing algorithm (costs one extra local network hop per authenticated request, negligible here):
 
 ```ts
 import type { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
 import { supabaseAdmin } from '../lib/supabaseAdmin.js';
 
 export type Role = 'Admin' | 'Designer' | 'FormFiller';
@@ -288,8 +304,6 @@ export type Role = 'Admin' | 'Designer' | 'FormFiller';
 export interface AuthedRequest extends Request {
   auth?: { userId: string; orgId: string | null; role: Role | null };
 }
-
-const JWT_SECRET = process.env.SUPABASE_JWT_SECRET ?? '';
 
 export async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
   const header = req.header('authorization') ?? '';
@@ -299,19 +313,12 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
     return;
   }
 
-  let payload: jwt.JwtPayload;
-  try {
-    payload = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload;
-  } catch {
+  const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(token);
+  if (userError || !userData.user) {
     res.status(401).json({ error: 'Invalid or expired token' });
     return;
   }
-
-  const userId = payload.sub;
-  if (!userId) {
-    res.status(401).json({ error: 'Invalid token payload' });
-    return;
-  }
+  const userId = userData.user.id;
 
   const { data, error } = await supabaseAdmin
     .from('profiles')
@@ -606,7 +613,7 @@ Expected: `403` (the Designer isn't an Admin).
 ```bash
 git add server/package.json server/package-lock.json server/src/lib/supabaseAdmin.ts \
   server/src/middleware/auth.ts server/src/routes/auth.ts server/src/index.ts \
-  server/scripts/mint-test-token.ts .env.example
+  server/scripts/mint-test-token.ts .env.example supabase/migrations/0005_enable_rls.sql
 git commit -m "feat(server): add Supabase auth middleware and /auth routes for orgs/invites"
 ```
 
