@@ -1,4 +1,5 @@
 import type {
+  Role,
   TemplateRecord,
   TemplateSummary,
   PublishedVersionSummary,
@@ -8,6 +9,7 @@ import type {
   SubmissionRecord,
 } from "../types.js";
 import type { Template } from "@pdfme/common";
+import { supabase } from "./supabase.js";
 
 export interface AiChatMessage {
   role: "user" | "assistant";
@@ -41,8 +43,15 @@ function versionRefToQuery(ref?: PublishedVersionRef): string {
   return `?tag=${encodeURIComponent(ref.tag)}`;
 }
 
+async function authHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(API_BASE + url, options);
+  const headers = { ...(await authHeaders()), ...(options?.headers ?? {}) };
+  const res = await fetch(API_BASE + url, { ...options, headers });
 
   if (!res.ok) {
     const text = await res.text();
@@ -109,7 +118,7 @@ export const api = {
   ): Promise<Uint8Array> => {
     const res = await fetch(API_BASE + "/generate-pdf", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await authHeaders()) },
       body: JSON.stringify({
         template_id,
         inputs,
@@ -150,7 +159,7 @@ export const api = {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("name", name);
-    const res = await fetch(API_BASE + "/assets", { method: "POST", body: formData });
+    const res = await fetch(API_BASE + "/assets", { method: "POST", headers: await authHeaders(), body: formData });
     if (!res.ok) {
       const text = await res.text();
       throw new Error(`${res.status} ${text}`);
@@ -199,5 +208,24 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, email }),
+    }),
+
+  getInvite: (code: string) => request<{ orgName: string; role: Role }>(`/auth/invites/${code}`),
+
+  acceptInvite: (code: string) =>
+    request<{ orgId: string; role: Role }>(`/auth/invites/${code}/accept`, { method: "POST" }),
+
+  createOrganization: (name: string) =>
+    request<{ orgId: string; orgName: string; role: Role }>("/auth/organizations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    }),
+
+  createInvite: (role: Role) =>
+    request<{ code: string; expiresAt: string }>("/auth/invites", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role }),
     }),
 };
