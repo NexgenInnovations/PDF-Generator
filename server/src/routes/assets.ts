@@ -5,6 +5,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { listAssets, getAsset, createAsset, deleteAsset } from '../db.js';
+import { requireAuth, requireRole, type AuthedRequest } from '../middleware/auth.js';
 
 export const assetsRouter = Router();
 
@@ -62,7 +63,7 @@ function handleUpload(req: Request, res: Response, next: NextFunction) {
  *       400:
  *         description: Missing file, missing name, or unsupported file type
  */
-assetsRouter.post('/', handleUpload, async (req: Request, res: Response) => {
+assetsRouter.post('/', requireAuth, requireRole(['Admin', 'Designer']), handleUpload, async (req: AuthedRequest, res: Response) => {
   const file = req.file;
   const name = (req.body as { name?: string }).name;
 
@@ -111,7 +112,7 @@ assetsRouter.post('/', handleUpload, async (req: Request, res: Response) => {
  *       200:
  *         description: All assets (metadata only)
  */
-assetsRouter.get('/', async (_req: Request, res: Response) => {
+assetsRouter.get('/', requireAuth, requireRole(['Admin', 'Designer']), async (_req: AuthedRequest, res: Response) => {
   try {
     const assets = await listAssets();
     res.json(assets);
@@ -141,7 +142,7 @@ assetsRouter.get('/', async (_req: Request, res: Response) => {
  *       404:
  *         description: Asset not found
  */
-assetsRouter.get('/:id/file', async (req: Request, res: Response) => {
+assetsRouter.get('/:id/file', requireAuth, requireRole(['Admin', 'Designer']), async (req: AuthedRequest, res: Response) => {
   try {
     const asset = await getAsset(req.params.id);
     if (!asset) {
@@ -177,7 +178,7 @@ assetsRouter.get('/:id/file', async (req: Request, res: Response) => {
  *       404:
  *         description: Asset not found
  */
-assetsRouter.delete('/:id', async (req: Request, res: Response) => {
+assetsRouter.delete('/:id', requireAuth, requireRole(['Admin', 'Designer']), async (req: AuthedRequest, res: Response) => {
   try {
     const deleted = await deleteAsset(req.params.id);
     if (!deleted) {

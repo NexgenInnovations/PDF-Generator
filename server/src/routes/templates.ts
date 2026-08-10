@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { requireAuth, requireRole, type AuthedRequest } from '../middleware/auth.js';
 import {
   createTemplate,
   deleteTemplate,
@@ -37,7 +38,7 @@ const handleError = (res: Response, error: unknown) => {
  *               items:
  *                 $ref: '#/components/schemas/TemplateSummary'
  */
-templatesRouter.get('/', async (_req: Request, res: Response) => {
+templatesRouter.get('/', requireAuth, async (_req: AuthedRequest, res: Response) => {
   try {
     res.json(await listTemplates());
   } catch (error) {
@@ -145,7 +146,7 @@ templatesRouter.get('/:id', async (req: Request, res: Response) => {
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-templatesRouter.post('/', async (req: Request, res: Response) => {
+templatesRouter.post('/', requireAuth, requireRole(['Admin', 'Designer']), async (req: AuthedRequest, res: Response) => {
   try {
     const { name, schema } = req.body as { name: string; schema: unknown };
     if (!name || !schema) {
@@ -199,7 +200,7 @@ templatesRouter.post('/', async (req: Request, res: Response) => {
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-templatesRouter.put('/:id', async (req: Request, res: Response) => {
+templatesRouter.put('/:id', requireAuth, requireRole(['Admin', 'Designer']), async (req: AuthedRequest, res: Response) => {
   try {
     const { name, schema } = req.body as { name?: string; schema?: unknown };
     if (!name) {
@@ -261,7 +262,7 @@ templatesRouter.put('/:id', async (req: Request, res: Response) => {
  *       409:
  *         description: Duplicate tag for this template
  */
-templatesRouter.post('/:id/publish', async (req: Request, res: Response) => {
+templatesRouter.post('/:id/publish', requireAuth, requireRole(['Admin', 'Designer']), async (req: AuthedRequest, res: Response) => {
   try {
     const { schema, tag, mode, version } = req.body as {
       schema?: unknown;
@@ -320,7 +321,7 @@ templatesRouter.post('/:id/publish', async (req: Request, res: Response) => {
  *       200:
  *         description: Array of published versions, newest first
  */
-templatesRouter.get('/:id/versions', async (req: Request, res: Response) => {
+templatesRouter.get('/:id/versions', requireAuth, async (req: AuthedRequest, res: Response) => {
   try {
     const versions = await listPublishedVersions(req.params.id);
     res.json(versions.map(v => ({ version: v.version, tag: v.tag, created_at: v.created_at })));
@@ -352,7 +353,7 @@ templatesRouter.get('/:id/versions', async (req: Request, res: Response) => {
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-templatesRouter.delete('/:id', async (req: Request, res: Response) => {
+templatesRouter.delete('/:id', requireAuth, requireRole(['Admin']), async (req: AuthedRequest, res: Response) => {
   try {
     await deleteTemplate(req.params.id);
     res.status(204).send();

@@ -1,6 +1,7 @@
 // server/src/routes/letterheads.ts
 import { Router, Request, Response } from 'express';
 import { listLetterheads, getLetterhead, createLetterhead, updateLetterhead, deleteLetterhead } from '../db.js';
+import { requireAuth, requireRole, type AuthedRequest } from '../middleware/auth.js';
 
 export const letterheadsRouter = Router();
 
@@ -32,7 +33,7 @@ export const letterheadsRouter = Router();
  *       400:
  *         description: Missing or invalid fields
  */
-letterheadsRouter.post('/', async (req: Request, res: Response) => {
+letterheadsRouter.post('/', requireAuth, requireRole(['Admin', 'Designer']), async (req: AuthedRequest, res: Response) => {
   const { name, type, staticSchema, pageWidth, pageHeight, basePdf } = req.body as {
     name?: string;
     type?: 'fields' | 'pdf';
@@ -92,7 +93,7 @@ letterheadsRouter.post('/', async (req: Request, res: Response) => {
  *       200:
  *         description: All letterheads
  */
-letterheadsRouter.get('/', async (_req: Request, res: Response) => {
+letterheadsRouter.get('/', requireAuth, requireRole(['Admin', 'Designer']), async (_req: AuthedRequest, res: Response) => {
   try {
     const letterheads = await listLetterheads();
     res.json(letterheads);
@@ -122,7 +123,7 @@ letterheadsRouter.get('/', async (_req: Request, res: Response) => {
  *       404:
  *         description: Letterhead not found
  */
-letterheadsRouter.get('/:id', async (req: Request, res: Response) => {
+letterheadsRouter.get('/:id', requireAuth, requireRole(['Admin', 'Designer']), async (req: AuthedRequest, res: Response) => {
   try {
     const letterhead = await getLetterhead(req.params.id);
     if (!letterhead) {
@@ -171,7 +172,7 @@ letterheadsRouter.get('/:id', async (req: Request, res: Response) => {
  *       404:
  *         description: Letterhead not found
  */
-letterheadsRouter.put('/:id', async (req: Request, res: Response) => {
+letterheadsRouter.put('/:id', requireAuth, requireRole(['Admin', 'Designer']), async (req: AuthedRequest, res: Response) => {
   const { name, staticSchema, pageWidth, pageHeight, basePdf } = req.body as {
     name?: string;
     staticSchema?: unknown;
@@ -230,7 +231,7 @@ letterheadsRouter.put('/:id', async (req: Request, res: Response) => {
  *       204:
  *         description: Deleted
  */
-letterheadsRouter.delete('/:id', async (req: Request, res: Response) => {
+letterheadsRouter.delete('/:id', requireAuth, requireRole(['Admin', 'Designer']), async (req: AuthedRequest, res: Response) => {
   try {
     await deleteLetterhead(req.params.id);
     res.status(204).send();

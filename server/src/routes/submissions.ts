@@ -1,6 +1,7 @@
 // server/src/routes/submissions.ts
 import { Router, Request, Response } from 'express';
 import { getTemplate, listSubmissionsForTemplate, listSignatureEventsForSubmission } from '../db.js';
+import { requireAuth, requireRole, type AuthedRequest } from '../middleware/auth.js';
 
 export const submissionsRouter = Router();
 
@@ -23,7 +24,7 @@ export const submissionsRouter = Router();
  *       404:
  *         description: Template not found
  */
-submissionsRouter.get('/templates/:id/submissions', async (req: Request, res: Response) => {
+submissionsRouter.get('/templates/:id/submissions', requireAuth, requireRole(['Admin', 'Designer']), async (req: AuthedRequest, res: Response) => {
   try {
     const template = await getTemplate(req.params.id);
     if (!template) {
