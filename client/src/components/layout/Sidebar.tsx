@@ -85,10 +85,7 @@ export function Sidebar() {
           <FileText className="h-4 w-4 text-white" />
         </div>
         <div className="flex flex-col leading-none">
-          <span className="text-sm font-semibold tracking-tight" style={{ color: 'var(--nx-ink)' }}>PDF Manager</span>
-          <span className="text-[11px]" style={{ color: 'var(--nx-ink-muted)' }}>
-            Nexgen
-          </span>
+          <span className="text-sm font-semibold tracking-tight" style={{ color: 'var(--nx-ink)' }}>Build Doc</span>
         </div>
       </div>
 

@@ -1,11 +1,9 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import multer, { MulterError } from 'multer';
 import { randomUUID } from 'crypto';
-import { promises as fs } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { listAssets, getAsset, createAsset, deleteAsset } from '../db.js';
 import { requireAuth, requireRole, type AuthedRequest } from '../middleware/auth.js';
+import { supabaseAdmin } from '../lib/supabaseAdmin.js';
 
 export const assetsRouter = Router();
 
@@ -15,8 +13,7 @@ const ALLOWED_MIME_TYPES: Record<string, string> = {
   'image/svg+xml': '.svg',
 };
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ASSETS_DIR = path.join(__dirname, '..', '..', 'assets');
+const BUCKET = 'company-assets';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -82,15 +79,16 @@ assetsRouter.post('/', requireAuth, requireRole(['Admin', 'Designer']), handleUp
   }
 
   const filename = `${randomUUID()}${ext}`;
-  const filePath = path.join(ASSETS_DIR, filename);
 
   try {
-    await fs.mkdir(ASSETS_DIR, { recursive: true });
-    await fs.writeFile(filePath, file.buffer);
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from(BUCKET)
+      .upload(filename, file.buffer, { contentType: file.mimetype });
+    if (uploadError) throw uploadError;
 
     const asset = await createAsset({
       name: name.trim(),
-      filePath,
+      filePath: filename,
       mimeType: file.mimetype,
       fileSizeBytes: file.size,
     });
@@ -149,7 +147,9 @@ assetsRouter.get('/:id/file', requireAuth, requireRole(['Admin', 'Designer']), a
       res.status(404).json({ error: 'Asset not found' });
       return;
     }
-    const bytes = await fs.readFile(asset.file_path);
+    const { data, error: downloadError } = await supabaseAdmin.storage.from(BUCKET).download(asset.file_path);
+    if (downloadError || !data) throw downloadError ?? new Error('File not found in storage');
+    const bytes = Buffer.from(await data.arrayBuffer());
     res.setHeader('Content-Type', asset.mime_type);
     res.send(bytes);
   } catch (error) {
@@ -185,10 +185,9 @@ assetsRouter.delete('/:id', requireAuth, requireRole(['Admin', 'Designer']), asy
       res.status(404).json({ error: 'Asset not found' });
       return;
     }
-    try {
-      await fs.unlink(deleted.file_path);
-    } catch (fileErr) {
-      console.warn(`Could not delete asset file at ${deleted.file_path}:`, fileErr);
+    const { error: removeError } = await supabaseAdmin.storage.from(BUCKET).remove([deleted.file_path]);
+    if (removeError) {
+      console.warn(`Could not delete asset file "${deleted.file_path}" from storage:`, removeError);
     }
     res.status(204).send();
   } catch (error) {

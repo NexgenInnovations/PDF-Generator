@@ -63,7 +63,7 @@ const faqs = [
   {
     question: 'What does "self-attested" e-signature mean?',
     answer:
-      "When someone signs a document in NexGen PDF Manager, their signature and the surrounding action are recorded in an audit trail tied to that submission. It's a self-attested signature, not a third-party-certified digital signature — useful for internal workflows and approvals rather than contexts that require certified digital signing.",
+      "When someone signs a document in Build Doc, their signature and the surrounding action are recorded in an audit trail tied to that submission. It's a self-attested signature, not a third-party-certified digital signature — useful for internal workflows and approvals rather than contexts that require certified digital signing.",
   },
   {
     question: "What's the difference between Admin, Designer, and other roles?",
@@ -110,7 +110,7 @@ export default function Landing() {
           >
             <FileText className="h-4 w-4" style={{ color: 'var(--nx-accent)' }} />
           </div>
-          <span className="text-sm font-semibold tracking-tight">NexGen PDF Manager</span>
+          <span className="text-sm font-semibold tracking-tight">Build Doc</span>
         </div>
         <nav className="hidden sm:flex items-center gap-6 text-sm font-medium" style={{ color: 'var(--nx-ink-secondary)' }}>
           <a href="#how-it-works" className="transition-colors hover:text-[var(--nx-ink)]">
@@ -151,7 +151,7 @@ export default function Landing() {
                 PDF documents, from template to signature
               </h1>
               <p className="mt-5 text-lg sm:text-xl max-w-lg" style={{ color: 'var(--nx-ink-secondary)' }}>
-                NexGen PDF Manager gives your team a single workflow for building document
+                Build Doc gives your team a single workflow for building document
                 templates, collecting filled-in forms and signatures, and tracking every
                 submission to completion.
               </p>
@@ -179,7 +179,7 @@ export default function Landing() {
                 </div>
                 <img
                   src="/landing/dashboard.png"
-                  alt="NexGen PDF Manager dashboard"
+                  alt="Build Doc dashboard"
                   className="block w-full aspect-[16/9] object-cover"
                 />
               </div>
@@ -316,7 +316,7 @@ export default function Landing() {
         className="px-6 sm:px-10 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs"
         style={{ borderTop: '1px solid var(--nx-hairline)', color: 'var(--nx-ink-muted)' }}
       >
-        <span>NexGen PDF Manager</span>
+        <span>Build Doc</span>
         <div className="flex items-center gap-4">
           <button onClick={() => navigate('/')} className="transition-colors hover:text-[var(--nx-ink-secondary)]">
             Dashboard
