@@ -21,3 +21,5 @@ server/data/
 supabase/.branches
 supabase/.temp
 .superpowers/
+.vercel
+.env*
