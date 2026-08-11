@@ -1,28 +1,21 @@
 // server/src/db.ts
-import pg from 'pg';
+import { supabaseAdmin } from './lib/supabaseAdmin.js';
 
-const { Pool, types } = pg;
-
-// bigint columns (file_size_bytes) are returned by node-postgres as strings
-// by default, to avoid precision loss above Number.MAX_SAFE_INTEGER. The
-// original MSSQL driver returned BIGINT columns as native JS numbers, and
-// db.ts's exported row types declare file_size_bytes as `number` — so parse
-// OID 20 (bigint) as an integer to match that behavior exactly. File sizes
-// stay far below Number.MAX_SAFE_INTEGER, so this is safe.
-types.setTypeParser(20, (val: string) => parseInt(val, 10));
-
-const pool = new Pool({
-  connectionString: process.env.SUPABASE_DB_URL ?? '',
-});
-
-// An idle client can emit an 'error' event (e.g. the DB restarting or the
-// connection being dropped by the server). Without a listener, that event
-// crashes the Node process — this keeps it a logged, non-fatal event.
-pool.on('error', (err) => console.error('Unexpected Postgres pool error', err));
+// PostgrestError objects are plain objects, not `instanceof Error` — but
+// every route handler in this codebase does `error instanceof Error ?
+// error.message : 'Unexpected server error'`. Wrapping preserves both that
+// check and the `.code` field isUniqueViolation() (and templates.ts's own
+// duplicate-tag check) rely on.
+function toError(pgError: { message: string; code?: string }): Error {
+  const err = new Error(pgError.message) as Error & { code?: string };
+  err.code = pgError.code;
+  return err;
+}
 
 export async function initDb(): Promise<void> {
-  await pool.query('select 1');
-  console.log('Connected to Postgres (Supabase)');
+  const { error } = await supabaseAdmin.from('pdf_templates').select('id').limit(1);
+  if (error) throw toError(error);
+  console.log('Connected to Supabase (Data API)');
 }
 
 export function isUniqueViolation(error: unknown): boolean {
@@ -141,35 +134,44 @@ interface LetterheadDbRow extends Omit<LetterheadRow, 'static_schema'> {
 // ─── pdf_templates ───────────────────────────────────────────────────────────
 
 export async function listTemplates(): Promise<TemplateRow[]> {
-  const { rows } = await pool.query<TemplateRow>(
-    `SELECT id, name, current_version, created_at, updated_at FROM pdf_templates ORDER BY created_at DESC`
-  );
-  return rows;
+  const { data, error } = await supabaseAdmin
+    .from('pdf_templates')
+    .select('id, name, current_version, created_at, updated_at')
+    .order('created_at', { ascending: false });
+  if (error) throw toError(error);
+  return data as TemplateRow[];
 }
 
 export async function getTemplate(id: string): Promise<TemplateRow | null> {
-  const { rows } = await pool.query<TemplateRow>(
-    `SELECT id, name, current_version, created_at, updated_at FROM pdf_templates WHERE id = $1`,
-    [id]
-  );
-  return rows[0] ?? null;
+  const { data, error } = await supabaseAdmin
+    .from('pdf_templates')
+    .select('id, name, current_version, created_at, updated_at')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw toError(error);
+  return data as TemplateRow | null;
 }
 
 export async function createTemplate(name: string): Promise<TemplateRow> {
-  const { rows } = await pool.query<TemplateRow>(`INSERT INTO pdf_templates (name) VALUES ($1) RETURNING *`, [name]);
-  return rows[0];
+  const { data, error } = await supabaseAdmin.from('pdf_templates').insert({ name }).select().single();
+  if (error) throw toError(error);
+  return data as TemplateRow;
 }
 
 export async function updateTemplate(id: string, name: string): Promise<TemplateRow | null> {
-  const { rows } = await pool.query<TemplateRow>(
-    `UPDATE pdf_templates SET name = $1, updated_at = now() WHERE id = $2 RETURNING *`,
-    [name, id]
-  );
-  return rows[0] ?? null;
+  const { data, error } = await supabaseAdmin
+    .from('pdf_templates')
+    .update({ name, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .maybeSingle();
+  if (error) throw toError(error);
+  return data as TemplateRow | null;
 }
 
 export async function deleteTemplate(id: string): Promise<void> {
-  await pool.query(`DELETE FROM pdf_templates WHERE id = $1`, [id]);
+  const { error } = await supabaseAdmin.from('pdf_templates').delete().eq('id', id);
+  if (error) throw toError(error);
 }
 
 // ─── template_versions ───────────────────────────────────────────────────────
@@ -184,40 +186,55 @@ export async function saveDraft(templateId: string, schema: unknown): Promise<Te
   const basePdfStr = JSON.stringify(schemaObj.basePdf ?? null);
   const schemasStr = JSON.stringify(schemaObj.schemas ?? null);
 
-  const { rows: existing } = await pool.query<{ id: string }>(
-    `SELECT id FROM template_versions WHERE template_id = $1 AND status = 'draft'`,
-    [templateId]
-  );
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from('template_versions')
+    .select('id')
+    .eq('template_id', templateId)
+    .eq('status', 'draft')
+    .maybeSingle();
+  if (existingError) throw toError(existingError);
 
-  if (existing[0]) {
-    const { rows } = await pool.query<TemplateVersionDbRow>(
-      `UPDATE template_versions SET schema = $1, base_pdf = $2, schemas = $3, created_at = now() WHERE id = $4 RETURNING *`,
-      [schemaStr, basePdfStr, schemasStr, existing[0].id]
-    );
-    return parseVersionRow(rows[0]);
+  if (existing) {
+    const { data, error } = await supabaseAdmin
+      .from('template_versions')
+      .update({ schema: schemaStr, base_pdf: basePdfStr, schemas: schemasStr, created_at: new Date().toISOString() })
+      .eq('id', existing.id)
+      .select()
+      .single();
+    if (error) throw toError(error);
+    return parseVersionRow(data as TemplateVersionDbRow);
   }
 
-  const { rows: templateRows } = await pool.query(`SELECT id FROM pdf_templates WHERE id = $1`, [templateId]);
-  if (!templateRows[0]) throw new Error('Template not found');
+  const { data: templateRow, error: templateError } = await supabaseAdmin
+    .from('pdf_templates')
+    .select('id')
+    .eq('id', templateId)
+    .maybeSingle();
+  if (templateError) throw toError(templateError);
+  if (!templateRow) throw new Error('Template not found');
 
   // Drafts always use the reserved sentinel version 0 — never a real
   // published version number — so a template's first-ever publish can
   // start at version 1 without colliding with the draft row under the
   // UNIQUE (template_id, version) constraint.
-  const { rows } = await pool.query<TemplateVersionDbRow>(
-    `INSERT INTO template_versions (template_id, version, status, tag, schema, base_pdf, schemas)
-     VALUES ($1, 0, 'draft', NULL, $2, $3, $4) RETURNING *`,
-    [templateId, schemaStr, basePdfStr, schemasStr]
-  );
-  return parseVersionRow(rows[0]);
+  const { data, error } = await supabaseAdmin
+    .from('template_versions')
+    .insert({ template_id: templateId, version: 0, status: 'draft', tag: null, schema: schemaStr, base_pdf: basePdfStr, schemas: schemasStr })
+    .select()
+    .single();
+  if (error) throw toError(error);
+  return parseVersionRow(data as TemplateVersionDbRow);
 }
 
 export async function getDraft(templateId: string): Promise<TemplateVersionRow | null> {
-  const { rows } = await pool.query<TemplateVersionDbRow>(
-    `SELECT * FROM template_versions WHERE template_id = $1 AND status = 'draft'`,
-    [templateId]
-  );
-  return rows[0] ? parseVersionRow(rows[0]) : null;
+  const { data, error } = await supabaseAdmin
+    .from('template_versions')
+    .select('*')
+    .eq('template_id', templateId)
+    .eq('status', 'draft')
+    .maybeSingle();
+  if (error) throw toError(error);
+  return data ? parseVersionRow(data as TemplateVersionDbRow) : null;
 }
 
 export async function publishVersion(
@@ -231,76 +248,51 @@ export async function publishVersion(
   const basePdfStr = JSON.stringify(schemaObj.basePdf ?? null);
   const schemasStr = JSON.stringify(schemaObj.schemas ?? null);
 
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
-    let row: TemplateVersionDbRow;
-    if (target.mode === 'new') {
-      const { rows: updated } = await client.query<{ current_version: number }>(
-        `UPDATE pdf_templates SET current_version = current_version + 1, updated_at = now() WHERE id = $1 RETURNING current_version`,
-        [templateId]
-      );
-      if (!updated[0]) throw new Error('Template not found');
-      const version = updated[0].current_version;
-
-      const { rows } = await client.query<TemplateVersionDbRow>(
-        `INSERT INTO template_versions (template_id, version, status, tag, schema, base_pdf, schemas)
-         VALUES ($1, $2, 'published', $3, $4, $5, $6) RETURNING *`,
-        [templateId, version, tag, schemaStr, basePdfStr, schemasStr]
-      );
-      row = rows[0];
-    } else {
-      const { rows } = await client.query<TemplateVersionDbRow>(
-        `UPDATE template_versions SET tag = $1, schema = $2, base_pdf = $3, schemas = $4, created_at = now()
-         WHERE template_id = $5 AND version = $6 AND status = 'published' RETURNING *`,
-        [tag, schemaStr, basePdfStr, schemasStr, templateId, target.version]
-      );
-      if (!rows[0]) throw new Error('Published version not found');
-      row = rows[0];
-    }
-
-    await client.query('COMMIT');
-    return parseVersionRow(row);
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
+  const { data, error } = await supabaseAdmin.rpc('publish_template_version', {
+    p_template_id: templateId,
+    p_schema: schemaStr,
+    p_base_pdf: basePdfStr,
+    p_schemas: schemasStr,
+    p_tag: tag,
+    p_mode: target.mode,
+    p_target_version: target.mode === 'replace' ? target.version : null,
+  });
+  if (error) throw toError(error);
+  return parseVersionRow(data as TemplateVersionDbRow);
 }
 
 export async function listPublishedVersions(templateId: string): Promise<TemplateVersionRow[]> {
-  const { rows } = await pool.query<TemplateVersionDbRow>(
-    `SELECT * FROM template_versions WHERE template_id = $1 AND status = 'published' ORDER BY version DESC`,
-    [templateId]
-  );
-  return rows.map(parseVersionRow);
+  const { data, error } = await supabaseAdmin
+    .from('template_versions')
+    .select('*')
+    .eq('template_id', templateId)
+    .eq('status', 'published')
+    .order('version', { ascending: false });
+  if (error) throw toError(error);
+  return (data as TemplateVersionDbRow[]).map(parseVersionRow);
 }
 
 export async function getPublishedVersion(
   templateId: string,
   ref: { version: number } | { tag: string }
 ): Promise<TemplateVersionRow | null> {
-  const { rows } =
-    'version' in ref
-      ? await pool.query<TemplateVersionDbRow>(
-          `SELECT * FROM template_versions WHERE template_id = $1 AND version = $2 AND status = 'published'`,
-          [templateId, ref.version]
-        )
-      : await pool.query<TemplateVersionDbRow>(
-          `SELECT * FROM template_versions WHERE template_id = $1 AND tag = $2 AND status = 'published'`,
-          [templateId, ref.tag]
-        );
-  return rows[0] ? parseVersionRow(rows[0]) : null;
+  const base = supabaseAdmin.from('template_versions').select('*').eq('template_id', templateId).eq('status', 'published');
+  const { data, error } = await ('version' in ref ? base.eq('version', ref.version) : base.eq('tag', ref.tag)).maybeSingle();
+  if (error) throw toError(error);
+  return data ? parseVersionRow(data as TemplateVersionDbRow) : null;
 }
 
 export async function getLatestPublishedVersion(templateId: string): Promise<TemplateVersionRow | null> {
-  const { rows } = await pool.query<TemplateVersionDbRow>(
-    `SELECT * FROM template_versions WHERE template_id = $1 AND status = 'published' ORDER BY version DESC LIMIT 1`,
-    [templateId]
-  );
-  return rows[0] ? parseVersionRow(rows[0]) : null;
+  const { data, error } = await supabaseAdmin
+    .from('template_versions')
+    .select('*')
+    .eq('template_id', templateId)
+    .eq('status', 'published')
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw toError(error);
+  return data ? parseVersionRow(data as TemplateVersionDbRow) : null;
 }
 
 // ─── filled_submissions ───────────────────────────────────────────────────────
@@ -310,24 +302,32 @@ export async function createFilledSubmission(
   templateVersion: number,
   inputs: unknown
 ): Promise<FilledSubmissionRow> {
-  const { rows } = await pool.query<FilledSubmissionDbRow>(
-    `INSERT INTO filled_submissions (template_id, template_version, inputs) VALUES ($1, $2, $3) RETURNING *`,
-    [templateId, templateVersion, JSON.stringify(inputs)]
-  );
-  return { ...rows[0], inputs: JSON.parse(rows[0].inputs) };
+  const { data, error } = await supabaseAdmin
+    .from('filled_submissions')
+    .insert({ template_id: templateId, template_version: templateVersion, inputs: JSON.stringify(inputs) })
+    .select()
+    .single();
+  if (error) throw toError(error);
+  const row = data as FilledSubmissionDbRow;
+  return { ...row, inputs: JSON.parse(row.inputs) };
 }
 
 export async function getFilledSubmission(id: string): Promise<FilledSubmissionRow | null> {
-  const { rows } = await pool.query<FilledSubmissionDbRow>(`SELECT * FROM filled_submissions WHERE id = $1`, [id]);
-  return rows[0] ? { ...rows[0], inputs: JSON.parse(rows[0].inputs) } : null;
+  const { data, error } = await supabaseAdmin.from('filled_submissions').select('*').eq('id', id).maybeSingle();
+  if (error) throw toError(error);
+  if (!data) return null;
+  const row = data as FilledSubmissionDbRow;
+  return { ...row, inputs: JSON.parse(row.inputs) };
 }
 
 export async function listSubmissionsForTemplate(templateId: string): Promise<FilledSubmissionRow[]> {
-  const { rows } = await pool.query<FilledSubmissionDbRow>(
-    `SELECT * FROM filled_submissions WHERE template_id = $1 ORDER BY submitted_at DESC`,
-    [templateId]
-  );
-  return rows.map((row) => ({ ...row, inputs: JSON.parse(row.inputs) }));
+  const { data, error } = await supabaseAdmin
+    .from('filled_submissions')
+    .select('*')
+    .eq('template_id', templateId)
+    .order('submitted_at', { ascending: false });
+  if (error) throw toError(error);
+  return (data as FilledSubmissionDbRow[]).map((row) => ({ ...row, inputs: JSON.parse(row.inputs) }));
 }
 
 // ─── generated_pdfs ──────────────────────────────────────────────────────────
@@ -341,36 +341,39 @@ export async function createGeneratedPdf(opts: {
   filePath: string;
   fileSizeBytes?: number;
 }): Promise<GeneratedPdfRow> {
-  const { rows } = await pool.query<GeneratedPdfDbRow>(
-    `INSERT INTO generated_pdfs
-       (submission_id, template_id, template_version, inputs_snapshot, schema_snapshot, file_path, file_size_bytes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-    [
-      opts.submissionId,
-      opts.templateId,
-      opts.templateVersion,
-      JSON.stringify(opts.inputsSnapshot),
-      JSON.stringify(opts.schemaSnapshot),
-      opts.filePath,
-      opts.fileSizeBytes ?? null,
-    ]
-  );
-  const row = rows[0];
+  const { data, error } = await supabaseAdmin
+    .from('generated_pdfs')
+    .insert({
+      submission_id: opts.submissionId,
+      template_id: opts.templateId,
+      template_version: opts.templateVersion,
+      inputs_snapshot: JSON.stringify(opts.inputsSnapshot),
+      schema_snapshot: JSON.stringify(opts.schemaSnapshot),
+      file_path: opts.filePath,
+      file_size_bytes: opts.fileSizeBytes ?? null,
+    })
+    .select()
+    .single();
+  if (error) throw toError(error);
+  const row = data as GeneratedPdfDbRow;
   return { ...row, inputs_snapshot: JSON.parse(row.inputs_snapshot), schema_snapshot: JSON.parse(row.schema_snapshot) };
 }
 
 // ─── company_assets ──────────────────────────────────────────────────────────
 
 export async function listAssets(): Promise<CompanyAssetRow[]> {
-  const { rows } = await pool.query<CompanyAssetRow>(
-    `SELECT id, name, file_path, mime_type, file_size_bytes, created_at FROM company_assets ORDER BY created_at DESC`
-  );
-  return rows;
+  const { data, error } = await supabaseAdmin
+    .from('company_assets')
+    .select('id, name, file_path, mime_type, file_size_bytes, created_at')
+    .order('created_at', { ascending: false });
+  if (error) throw toError(error);
+  return data as CompanyAssetRow[];
 }
 
 export async function getAsset(id: string): Promise<CompanyAssetRow | null> {
-  const { rows } = await pool.query<CompanyAssetRow>(`SELECT * FROM company_assets WHERE id = $1`, [id]);
-  return rows[0] ?? null;
+  const { data, error } = await supabaseAdmin.from('company_assets').select('*').eq('id', id).maybeSingle();
+  if (error) throw toError(error);
+  return data as CompanyAssetRow | null;
 }
 
 export async function createAsset(input: {
@@ -379,16 +382,19 @@ export async function createAsset(input: {
   mimeType: string;
   fileSizeBytes: number;
 }): Promise<CompanyAssetRow> {
-  const { rows } = await pool.query<CompanyAssetRow>(
-    `INSERT INTO company_assets (name, file_path, mime_type, file_size_bytes) VALUES ($1, $2, $3, $4) RETURNING *`,
-    [input.name, input.filePath, input.mimeType, input.fileSizeBytes]
-  );
-  return rows[0];
+  const { data, error } = await supabaseAdmin
+    .from('company_assets')
+    .insert({ name: input.name, file_path: input.filePath, mime_type: input.mimeType, file_size_bytes: input.fileSizeBytes })
+    .select()
+    .single();
+  if (error) throw toError(error);
+  return data as CompanyAssetRow;
 }
 
 export async function deleteAsset(id: string): Promise<CompanyAssetRow | null> {
-  const { rows } = await pool.query<CompanyAssetRow>(`DELETE FROM company_assets WHERE id = $1 RETURNING *`, [id]);
-  return rows[0] ?? null;
+  const { data, error } = await supabaseAdmin.from('company_assets').delete().eq('id', id).select().maybeSingle();
+  if (error) throw toError(error);
+  return data as CompanyAssetRow | null;
 }
 
 // ─── letterheads ──────────────────────────────────────────────────────────────
@@ -398,18 +404,22 @@ function parseLetterheadRow(row: LetterheadDbRow): LetterheadRow {
 }
 
 export async function listLetterheads(): Promise<LetterheadSummaryRow[]> {
-  const { rows } = await pool.query<LetterheadSummaryRow>(
-    `SELECT id, name, type, page_width, page_height, created_at, updated_at FROM letterheads ORDER BY updated_at DESC`
-  );
-  return rows;
+  const { data, error } = await supabaseAdmin
+    .from('letterheads')
+    .select('id, name, type, page_width, page_height, created_at, updated_at')
+    .order('updated_at', { ascending: false });
+  if (error) throw toError(error);
+  return data as LetterheadSummaryRow[];
 }
 
 export async function getLetterhead(id: string): Promise<LetterheadRow | null> {
-  const { rows } = await pool.query<LetterheadDbRow>(
-    `SELECT id, name, type, static_schema, page_width, page_height, base_pdf, created_at, updated_at FROM letterheads WHERE id = $1`,
-    [id]
-  );
-  return rows[0] ? parseLetterheadRow(rows[0]) : null;
+  const { data, error } = await supabaseAdmin
+    .from('letterheads')
+    .select('id, name, type, static_schema, page_width, page_height, base_pdf, created_at, updated_at')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw toError(error);
+  return data ? parseLetterheadRow(data as LetterheadDbRow) : null;
 }
 
 export async function createLetterhead(input: {
@@ -420,20 +430,20 @@ export async function createLetterhead(input: {
   pageHeight?: number;
   basePdf?: string;
 }): Promise<LetterheadRow> {
-  const { rows } = await pool.query<LetterheadDbRow>(
-    `INSERT INTO letterheads (name, type, static_schema, page_width, page_height, base_pdf)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id, name, type, static_schema, page_width, page_height, base_pdf, created_at, updated_at`,
-    [
-      input.name,
-      input.type,
-      input.staticSchema !== undefined ? JSON.stringify(input.staticSchema) : null,
-      input.pageWidth ?? null,
-      input.pageHeight ?? null,
-      input.basePdf ?? null,
-    ]
-  );
-  return parseLetterheadRow(rows[0]);
+  const { data, error } = await supabaseAdmin
+    .from('letterheads')
+    .insert({
+      name: input.name,
+      type: input.type,
+      static_schema: input.staticSchema !== undefined ? JSON.stringify(input.staticSchema) : null,
+      page_width: input.pageWidth ?? null,
+      page_height: input.pageHeight ?? null,
+      base_pdf: input.basePdf ?? null,
+    })
+    .select('id, name, type, static_schema, page_width, page_height, base_pdf, created_at, updated_at')
+    .single();
+  if (error) throw toError(error);
+  return parseLetterheadRow(data as LetterheadDbRow);
 }
 
 export async function updateLetterhead(
@@ -449,17 +459,26 @@ export async function updateLetterhead(
   const pageHeight = input.pageHeight ?? existing.page_height;
   const basePdf = input.basePdf ?? existing.base_pdf;
 
-  const { rows } = await pool.query<LetterheadDbRow>(
-    `UPDATE letterheads SET name = $1, static_schema = $2, page_width = $3, page_height = $4, base_pdf = $5, updated_at = now()
-     WHERE id = $6
-     RETURNING id, name, type, static_schema, page_width, page_height, base_pdf, created_at, updated_at`,
-    [name, staticSchema !== null && staticSchema !== undefined ? JSON.stringify(staticSchema) : null, pageWidth, pageHeight, basePdf, id]
-  );
-  return rows[0] ? parseLetterheadRow(rows[0]) : null;
+  const { data, error } = await supabaseAdmin
+    .from('letterheads')
+    .update({
+      name,
+      static_schema: staticSchema !== null && staticSchema !== undefined ? JSON.stringify(staticSchema) : null,
+      page_width: pageWidth,
+      page_height: pageHeight,
+      base_pdf: basePdf,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select('id, name, type, static_schema, page_width, page_height, base_pdf, created_at, updated_at')
+    .maybeSingle();
+  if (error) throw toError(error);
+  return data ? parseLetterheadRow(data as LetterheadDbRow) : null;
 }
 
 export async function deleteLetterhead(id: string): Promise<void> {
-  await pool.query(`DELETE FROM letterheads WHERE id = $1`, [id]);
+  const { error } = await supabaseAdmin.from('letterheads').delete().eq('id', id);
+  if (error) throw toError(error);
 }
 
 // ─── signature_events ───────────────────────────────────────────────────────
@@ -472,28 +491,35 @@ export async function createSignatureEvent(input: {
   ipAddress: string | null;
   documentHash: string;
 }): Promise<SignatureEventRow> {
-  const { rows } = await pool.query<SignatureEventRow>(
-    `INSERT INTO signature_events (submission_id, field_name, signer_name, signer_email, ip_address, document_hash)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [input.submissionId, input.fieldName, input.signerName, input.signerEmail, input.ipAddress, input.documentHash]
-  );
-  return rows[0];
+  const { data, error } = await supabaseAdmin
+    .from('signature_events')
+    .insert({
+      submission_id: input.submissionId,
+      field_name: input.fieldName,
+      signer_name: input.signerName,
+      signer_email: input.signerEmail,
+      ip_address: input.ipAddress,
+      document_hash: input.documentHash,
+    })
+    .select()
+    .single();
+  if (error) throw toError(error);
+  return data as SignatureEventRow;
 }
 
 export async function listSignatureEventsForSubmission(submissionId: string): Promise<SignatureEventRow[]> {
-  const { rows } = await pool.query<SignatureEventRow>(
-    `SELECT * FROM signature_events WHERE submission_id = $1 ORDER BY signed_at ASC`,
-    [submissionId]
-  );
-  return rows;
+  const { data, error } = await supabaseAdmin
+    .from('signature_events')
+    .select('*')
+    .eq('submission_id', submissionId)
+    .order('signed_at', { ascending: true });
+  if (error) throw toError(error);
+  return data as SignatureEventRow[];
 }
 
 export async function createWaitlistSignup(name: string, email: string): Promise<{ alreadyOnList: boolean }> {
-  try {
-    await pool.query(`INSERT INTO waitlist_signups (name, email) VALUES ($1, $2)`, [name, email]);
-    return { alreadyOnList: false };
-  } catch (error) {
-    if (isUniqueViolation(error)) return { alreadyOnList: true };
-    throw error;
-  }
+  const { error } = await supabaseAdmin.from('waitlist_signups').insert({ name, email });
+  if (!error) return { alreadyOnList: false };
+  if (isUniqueViolation(error)) return { alreadyOnList: true };
+  throw toError(error);
 }
