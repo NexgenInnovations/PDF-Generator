@@ -1,0 +1,8 @@
+{
+  "installCommand": "npm install",
+  "buildCommand": "npm run build && npm --prefix client install && npm --prefix client run build && npm --prefix server install",
+  "outputDirectory": "client/dist",
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
+}
