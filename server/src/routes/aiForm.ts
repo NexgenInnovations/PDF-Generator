@@ -44,6 +44,11 @@ export const aiFormRouter = Router();
  *                       type: number
  *                     height:
  *                       type: number
+ *               currentFields:
+ *                 type: array
+ *                 description: The field list already on the form (as previously returned in `fields`), so the AI can treat this message as a modification instead of starting over.
+ *                 items:
+ *                   type: object
  *     responses:
  *       200:
  *         description: Either a clarifying question or the finished template
@@ -58,6 +63,11 @@ export const aiFormRouter = Router();
  *                   type: string
  *                 template:
  *                   type: object
+ *                 fields:
+ *                   type: array
+ *                   description: The field list used to build `template` — pass this back as `currentFields` on the next message to let the AI keep tweaking it.
+ *                   items:
+ *                     type: object
  *       400:
  *         description: Missing or invalid messages array
  *         content:
@@ -77,9 +87,10 @@ function isValidOccupiedRegion(r: unknown): r is OccupiedRegion {
 }
 
 aiFormRouter.post('/chat', requireAuth, requireRole(['Admin', 'Designer']), async (req: AuthedRequest, res: Response) => {
-  const { messages, occupiedRegions } = req.body as {
+  const { messages, occupiedRegions, currentFields } = req.body as {
     messages?: ChatMessage[];
     occupiedRegions?: unknown;
+    currentFields?: unknown;
   };
 
   if (!Array.isArray(messages) || messages.length === 0) {
@@ -97,7 +108,7 @@ aiFormRouter.post('/chat', requireAuth, requireRole(['Admin', 'Designer']), asyn
   }
 
   try {
-    const result = await runAiFormChat(messages, validatedRegions);
+    const result = await runAiFormChat(messages, validatedRegions, currentFields);
     res.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected server error';

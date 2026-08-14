@@ -267,6 +267,9 @@ export default function TemplateDesigner() {
   );
   const containerRef = useRef<HTMLDivElement | null>(null);
   const designerRef = useRef<Designer | null>(null);
+  // Schema element names the AI produced last turn, so a follow-up tweak can
+  // replace them instead of piling up duplicates. Reset whenever `id` changes.
+  const aiManagedNamesRef = useRef<Set<string>>(new Set());
   const basePdfInputRef = useRef<HTMLInputElement | null>(null);
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
@@ -298,6 +301,7 @@ export default function TemplateDesigner() {
 
   useEffect(() => {
     let mounted = true;
+    aiManagedNamesRef.current = new Set();
 
     const init = async () => {
       if (!containerRef.current) return;
@@ -462,13 +466,35 @@ export default function TemplateDesigner() {
     }
     const t = designerRef.current.getTemplate();
     const pageIndex = designerRef.current.getPageCursor();
-    const aiFields = aiTemplate.schemas.flat();
-    const schemas = t.schemas.map((page, i) =>
-      i === pageIndex ? [...page, ...aiFields] : page
+
+    // Strip whatever the AI authored on a previous turn so a follow-up tweak
+    // ("remove that question", "rename this field") replaces it instead of
+    // piling duplicates on top — anything added by hand is left untouched. A
+    // page is only dropped if stripping is what emptied it; a page that was
+    // already blank for other reasons stays put.
+    const staleNames = aiManagedNamesRef.current;
+    const strippedPages = t.schemas
+      .map(page => ({
+        before: page.length,
+        after: page.filter(el => !staleNames.has(el.name)),
+      }))
+      .filter(p => !(p.before > 0 && p.after.length === 0))
+      .map(p => p.after);
+    if (strippedPages.length === 0) strippedPages.push([]);
+
+    const targetIndex = Math.min(pageIndex, strippedPages.length - 1);
+
+    // The AI response may span multiple pages (e.g. a long survey). Merge its
+    // first page onto the target page, and insert any further pages as new
+    // pages right after it — flattening every AI page onto one page would
+    // ignore its pagination and stack pages' fields on top of each other.
+    const [firstAiPage, ...restAiPages] = aiTemplate.schemas;
+    const schemas = strippedPages.flatMap((page, i) =>
+      i === targetIndex ? [[...page, ...(firstAiPage ?? [])], ...restAiPages] : [page]
     );
     designerRef.current.updateTemplate({ ...t, schemas });
+    aiManagedNamesRef.current = new Set(aiTemplate.schemas.flat().map(el => el.name));
     setTemplateVersion(v => v + 1);
-    setAiOpen(false);
   };
 
   const handleAssetPicked = (content: string, mimeType: string) => {
@@ -925,16 +951,6 @@ export default function TemplateDesigner() {
         </div>
       )}
 
-      {/* AI form builder panel */}
-      {aiOpen && (
-        <AskAiPanel
-          onClose={() => setAiOpen(false)}
-          onTemplateReady={handleAiTemplateReady}
-          occupiedRegions={getAiOccupiedRegions()}
-          initialPrompt={seedPrompt}
-        />
-      )}
-
       {/* Header & Footer editor */}
       {headerFooterOpen && currentBasePdf && isBlankPdf(currentBasePdf) && (
         <HeaderFooterEditor
@@ -989,8 +1005,18 @@ export default function TemplateDesigner() {
         />
       )}
 
-      {/* Designer canvas */}
-      <div ref={containerRef} className="flex-1 min-h-0 overflow-hidden" />
+      {/* Designer canvas + AI sidebar */}
+      <div className="flex-1 min-h-0 flex flex-row">
+        <div ref={containerRef} className="flex-1 min-h-0 overflow-hidden" />
+        <AskAiPanel
+          key={id ?? 'new'}
+          open={aiOpen}
+          onClose={() => setAiOpen(false)}
+          onTemplateReady={handleAiTemplateReady}
+          occupiedRegions={getAiOccupiedRegions()}
+          initialPrompt={seedPrompt}
+        />
+      </div>
     </div>
   );
 }

@@ -23,10 +23,18 @@ export interface AiOccupiedRegion {
   height: number;
 }
 
+export interface AiFieldSpec {
+  name: string;
+  label: string;
+  type: "text" | "date" | "select" | "checkbox" | "checkbox_group" | "static_text";
+  options?: string[];
+}
+
 export interface AiFormChatResponse {
   done: boolean;
   message: string;
   template?: Template;
+  fields?: AiFieldSpec[];
 }
 
 export interface AiPdfVisionResponse {
@@ -136,13 +144,14 @@ export const api = {
     return new Uint8Array(buf);
   },
 
-  aiFormChat: (messages: AiChatMessage[], occupiedRegions?: AiOccupiedRegion[]) =>
+  aiFormChat: (messages: AiChatMessage[], occupiedRegions?: AiOccupiedRegion[], currentFields?: AiFieldSpec[]) =>
     request<AiFormChatResponse>("/ai-form/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         messages,
         ...(occupiedRegions && occupiedRegions.length > 0 ? { occupiedRegions } : {}),
+        ...(currentFields && currentFields.length > 0 ? { currentFields } : {}),
       }),
     }),
 
