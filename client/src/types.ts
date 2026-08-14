@@ -70,4 +70,16 @@ export interface SubmissionRecord {
   template_version: number;
   submitted_at: string;
   signatureEvents: SignatureEventRecord[];
+  generatedPdfId: string | null;
+  fileSizeBytes: number | null;
+}
+
+export interface AllSubmissionsRecord {
+  id: string;
+  submission_id: string;
+  template_id: string;
+  template_name: string;
+  template_version: number;
+  file_size_bytes: number | null;
+  generated_at: string;
 }

@@ -8,6 +8,7 @@ import {
   Image,
   BookOpen,
   LayoutGrid,
+  ClipboardList,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.js';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar.js';
@@ -110,6 +111,9 @@ export function Sidebar() {
         )}
         {(role === 'Admin' || role === 'Designer') && (
           <NavItem to="/letterheads" icon={<BookOpen className="h-4 w-4" />} label="Letterheads" tourId={TOUR_ANCHORS.sidebarLetterheads} />
+        )}
+        {(role === 'Admin' || role === 'Designer') && (
+          <NavItem to="/submissions" icon={<ClipboardList className="h-4 w-4" />} label="Submissions" />
         )}
         {role === 'Admin' && (
           <NavItem to="/settings" icon={<Settings className="h-4 w-4" />} label="Settings" />

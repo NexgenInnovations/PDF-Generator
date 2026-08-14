@@ -299,7 +299,7 @@ export default function FormFill() {
           }}
         >
           {pageState === 'preview' ? (
-            <span className="inline-flex items-center gap-1"><FileCheck className="h-3 w-3" />Generated</span>
+            <span className="inline-flex items-center gap-1"><FileCheck className="h-3 w-3" />Submitted</span>
           ) : 'Filling'}
         </span>
 
@@ -358,8 +358,8 @@ export default function FormFill() {
             style={{ borderRadius: 50 }}
           >
             {submitting ? (
-              <><Loader2 className="h-3.5 w-3.5 animate-spin" />Generating…</>
-            ) : 'Generate PDF'}
+              <><Loader2 className="h-3.5 w-3.5 animate-spin" />Submitting…</>
+            ) : 'Submit'}
           </button>
         )}
 
@@ -374,6 +374,16 @@ export default function FormFill() {
           </button>
         )}
       </div>
+
+      {pageState === 'preview' && (
+        <div
+          className="flex items-center gap-2 text-sm"
+          style={{ padding: '10px 16px', background: '#f0faf2', borderBottom: '1px solid #e6e6e6', color: '#1ea64a' }}
+        >
+          <FileCheck className="h-4 w-4 shrink-0" />
+          Your submission was received. You can download your own copy below.
+        </div>
+      )}
 
       {pageState === 'filling' && (signatureFields.length > 0 || signAnywhereFieldName) && (
         <div style={{ padding: '12px 16px', background: '#f7f7f5', borderBottom: '1px solid #e6e6e6' }}>

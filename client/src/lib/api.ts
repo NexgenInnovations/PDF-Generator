@@ -7,6 +7,7 @@ import type {
   LetterheadSummary,
   LetterheadRecord,
   SubmissionRecord,
+  AllSubmissionsRecord,
 } from "../types.js";
 import type { Template } from "@pdfme/common";
 import { supabase } from "./supabase.js";
@@ -55,6 +56,21 @@ export async function authHeaders(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+// The download endpoints require an auth header, so a bare <a href> can't be
+// used directly — fetch the bytes with the token, then trigger the browser's
+// save dialog via a throwaway object URL.
+export async function downloadFile(url: string, filename: string): Promise<void> {
+  const res = await fetch(url, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`Failed to download file: ${res.status}`);
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(objectUrl);
 }
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
@@ -211,6 +227,10 @@ export const api = {
   deleteLetterhead: (id: string) => request<void>(`/letterheads/${id}`, { method: "DELETE" }),
 
   listSubmissions: (templateId: string) => request<SubmissionRecord[]>(`/templates/${templateId}/submissions`),
+
+  listAllSubmissions: () => request<AllSubmissionsRecord[]>("/submissions"),
+
+  generatedPdfFileUrl: (id: string) => `${API_BASE}/generated-pdfs/${id}/file`,
 
   submitWaitlist: (name: string, email: string) =>
     request<{ alreadyOnList: boolean }>("/waitlist", {

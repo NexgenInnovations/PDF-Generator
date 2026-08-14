@@ -80,6 +80,16 @@ export interface GeneratedPdfRow {
   generated_at: string;
 }
 
+export interface GeneratedPdfSummaryRow {
+  id: string;
+  submission_id: string;
+  template_id: string;
+  template_name: string;
+  template_version: number;
+  file_size_bytes: number | null;
+  generated_at: string;
+}
+
 interface GeneratedPdfDbRow extends Omit<GeneratedPdfRow, 'inputs_snapshot' | 'schema_snapshot'> {
   inputs_snapshot: string;
   schema_snapshot: string;
@@ -167,6 +177,15 @@ export async function getTemplate(id: string, orgId: string | null): Promise<Tem
   const { data, error } = await query.maybeSingle();
   if (error) throw toError(error);
   return data as TemplateRow | null;
+}
+
+// Used by the unauthenticated /generate-pdf route to stamp the org that
+// owns a submission — the request itself carries no orgId, but the
+// template it's filling always belongs to one.
+export async function getTemplateOrgId(id: string): Promise<string | null> {
+  const { data, error } = await supabaseAdmin.from('pdf_templates').select('org_id').eq('id', id).maybeSingle();
+  if (error) throw toError(error);
+  return (data as { org_id: string | null } | null)?.org_id ?? null;
 }
 
 export async function createTemplate(name: string, orgId: string): Promise<TemplateRow> {
@@ -326,11 +345,12 @@ export async function getLatestPublishedVersion(templateId: string, orgId: strin
 export async function createFilledSubmission(
   templateId: string,
   templateVersion: number,
-  inputs: unknown
+  inputs: unknown,
+  orgId: string | null
 ): Promise<FilledSubmissionRow> {
   const { data, error } = await supabaseAdmin
     .from('filled_submissions')
-    .insert({ template_id: templateId, template_version: templateVersion, inputs: JSON.stringify(inputs) })
+    .insert({ template_id: templateId, template_version: templateVersion, inputs: JSON.stringify(inputs), org_id: orgId })
     .select()
     .single();
   if (error) throw toError(error);
@@ -366,6 +386,7 @@ export async function createGeneratedPdf(opts: {
   schemaSnapshot: unknown;
   filePath: string;
   fileSizeBytes?: number;
+  orgId: string | null;
 }): Promise<GeneratedPdfRow> {
   const { data, error } = await supabaseAdmin
     .from('generated_pdfs')
@@ -377,12 +398,58 @@ export async function createGeneratedPdf(opts: {
       schema_snapshot: JSON.stringify(opts.schemaSnapshot),
       file_path: opts.filePath,
       file_size_bytes: opts.fileSizeBytes ?? null,
+      org_id: opts.orgId,
     })
     .select()
     .single();
   if (error) throw toError(error);
   const row = data as GeneratedPdfDbRow;
   return { ...row, inputs_snapshot: JSON.parse(row.inputs_snapshot), schema_snapshot: JSON.parse(row.schema_snapshot) };
+}
+
+export async function getGeneratedPdf(id: string, orgId: string): Promise<GeneratedPdfRow | null> {
+  const { data, error } = await supabaseAdmin
+    .from('generated_pdfs')
+    .select('*')
+    .eq('id', id)
+    .eq('org_id', orgId)
+    .maybeSingle();
+  if (error) throw toError(error);
+  if (!data) return null;
+  const row = data as GeneratedPdfDbRow;
+  return { ...row, inputs_snapshot: JSON.parse(row.inputs_snapshot), schema_snapshot: JSON.parse(row.schema_snapshot) };
+}
+
+export async function getGeneratedPdfBySubmissionId(submissionId: string): Promise<{ id: string; file_size_bytes: number | null } | null> {
+  const { data, error } = await supabaseAdmin
+    .from('generated_pdfs')
+    .select('id, file_size_bytes')
+    .eq('submission_id', submissionId)
+    .maybeSingle();
+  if (error) throw toError(error);
+  return data as { id: string; file_size_bytes: number | null } | null;
+}
+
+// All filled PDFs across every template in the org, newest first — the
+// global admin "Submissions" view. pdf_templates!inner both requires a
+// matching template (excluding orphaned rows) and lets us filter/select
+// through the join without a separate round-trip for template names.
+export async function listGeneratedPdfsForOrg(orgId: string): Promise<GeneratedPdfSummaryRow[]> {
+  const { data, error } = await supabaseAdmin
+    .from('generated_pdfs')
+    .select('id, submission_id, template_id, template_version, file_size_bytes, generated_at, pdf_templates!inner(name, org_id)')
+    .eq('pdf_templates.org_id', orgId)
+    .order('generated_at', { ascending: false });
+  if (error) throw toError(error);
+  return (data as unknown as Array<GeneratedPdfDbRow & { pdf_templates: { name: string } }>).map(row => ({
+    id: row.id,
+    submission_id: row.submission_id,
+    template_id: row.template_id,
+    template_name: row.pdf_templates.name,
+    template_version: row.template_version,
+    file_size_bytes: row.file_size_bytes,
+    generated_at: row.generated_at,
+  }));
 }
 
 // ─── company_assets ──────────────────────────────────────────────────────────

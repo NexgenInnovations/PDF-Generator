@@ -1,9 +1,20 @@
 import { Router, Request, Response } from 'express';
 import { createHash, randomUUID } from 'crypto';
 import { generatePdf } from '../services/pdfService.js';
-import { getTemplate, getPublishedVersion, getLatestPublishedVersion, createFilledSubmission, createGeneratedPdf, createSignatureEvent } from '../db.js';
+import {
+  getTemplate,
+  getTemplateOrgId,
+  getPublishedVersion,
+  getLatestPublishedVersion,
+  createFilledSubmission,
+  createGeneratedPdf,
+  createSignatureEvent,
+} from '../db.js';
+import { supabaseAdmin } from '../lib/supabaseAdmin.js';
 import { isBlankPdf, type Template } from '@pdfme/common';
 import { pdf2size } from '@pdfme/converter';
+
+const FILLED_PDFS_BUCKET = 'filled-pdfs';
 
 export const generatePdfRouter = Router();
 
@@ -208,10 +219,28 @@ generatePdfRouter.post('/', async (req: Request, res: Response) => {
     const pdf = await generatePdf(templateForGeneration, inputs);
 
     try {
+      const orgId = await getTemplateOrgId(template_id);
+
+      // Best-effort: if the upload fails, the filler still gets their PDF in
+      // this response (below) — only the admin-facing copy is lost, recorded
+      // via the sentinel path so it's visible in generated_pdfs why there's
+      // nothing to download.
+      let filePath = 'upload-failed';
+      const objectKey = `${randomUUID()}.pdf`;
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from(FILLED_PDFS_BUCKET)
+        .upload(objectKey, pdf, { contentType: 'application/pdf' });
+      if (uploadError) {
+        console.error('Failed to upload generated PDF to storage:', uploadError);
+      } else {
+        filePath = objectKey;
+      }
+
       const submission = await createFilledSubmission(
         template_id,
         resolvedVersion.version,
-        inputs
+        inputs,
+        orgId
       );
       await createGeneratedPdf({
         submissionId: submission.id,
@@ -219,8 +248,9 @@ generatePdfRouter.post('/', async (req: Request, res: Response) => {
         templateVersion: resolvedVersion.version,
         inputsSnapshot: inputs,
         schemaSnapshot: resolvedVersion.schema,
-        filePath: 'generated-in-memory',
+        filePath,
         fileSizeBytes: pdf.length,
+        orgId,
       });
 
       const allSignatureEvents = [

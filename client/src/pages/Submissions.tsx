@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, AlertCircle, ClipboardList, CheckCircle2, PenLine } from 'lucide-react';
-import { api } from '../lib/api.js';
+import { ArrowLeft, AlertCircle, ClipboardList, CheckCircle2, PenLine, Download } from 'lucide-react';
+import { api, downloadFile } from '../lib/api.js';
 import type { SubmissionRecord } from '../types.js';
 import { AppLayout } from '../components/layout/AppLayout.js';
 import { TopBar } from '../components/layout/TopBar.js';
@@ -28,6 +28,7 @@ export default function Submissions() {
   const [submissions, setSubmissions] = useState<SubmissionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -36,6 +37,22 @@ export default function Submissions() {
       .catch(err => setError((err as Error).message))
       .finally(() => setLoading(false));
   }, [id]);
+
+  const handleDownload = async (submission: SubmissionRecord) => {
+    if (!submission.generatedPdfId) return;
+    setDownloadingId(submission.id);
+    setError(null);
+    try {
+      await downloadFile(
+        api.generatedPdfFileUrl(submission.generatedPdfId),
+        `submission-${submission.id}.pdf`
+      );
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   return (
     <AppLayout>
@@ -96,9 +113,22 @@ export default function Submissions() {
                     <span className="text-xs font-semibold" style={{ color: 'var(--nx-ink)' }}>
                       Version {s.template_version}
                     </span>
-                    <span className="text-xs" style={{ color: 'var(--nx-ink-muted)' }}>
-                      {new Date(s.submitted_at).toLocaleString()}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs" style={{ color: 'var(--nx-ink-muted)' }}>
+                        {new Date(s.submitted_at).toLocaleString()}
+                      </span>
+                      {s.generatedPdfId && (
+                        <button
+                          onClick={() => void handleDownload(s)}
+                          disabled={downloadingId === s.id}
+                          className="flex items-center gap-1 text-xs font-semibold transition-colors hover:text-[var(--nx-ink)] disabled:opacity-50"
+                          style={{ color: 'var(--nx-accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          {downloadingId === s.id ? 'Downloading…' : 'Download PDF'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
                 {s.signatureEvents.length === 0 ? (

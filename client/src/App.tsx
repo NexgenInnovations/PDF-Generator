@@ -15,6 +15,7 @@ const FormFill = lazy(() => import('./pages/FormFill.js'));
 const Assets = lazy(() => import('./pages/Assets.js'));
 const Letterheads = lazy(() => import('./pages/Letterheads.js'));
 const Submissions = lazy(() => import('./pages/Submissions.js'));
+const AllSubmissions = lazy(() => import('./pages/AllSubmissions.js'));
 const Settings = lazy(() => import('./pages/Settings.js'));
 const NotFound = lazy(() => import('./pages/NotFound.js'));
 
@@ -104,6 +105,16 @@ export default function App() {
             <AuthGuard>
               <RoleGuard allowed={['Admin', 'Designer']}>
                 <Submissions />
+              </RoleGuard>
+            </AuthGuard>
+          }
+        />
+        <Route
+          path="/submissions"
+          element={
+            <AuthGuard>
+              <RoleGuard allowed={['Admin', 'Designer']}>
+                <AllSubmissions />
               </RoleGuard>
             </AuthGuard>
           }
