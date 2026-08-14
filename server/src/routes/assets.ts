@@ -91,6 +91,7 @@ assetsRouter.post('/', requireAuth, requireRole(['Admin', 'Designer']), handleUp
       filePath: filename,
       mimeType: file.mimetype,
       fileSizeBytes: file.size,
+      orgId: req.auth!.orgId!,
     });
     res.status(201).json(asset);
   } catch (error) {
@@ -110,9 +111,9 @@ assetsRouter.post('/', requireAuth, requireRole(['Admin', 'Designer']), handleUp
  *       200:
  *         description: All assets (metadata only)
  */
-assetsRouter.get('/', requireAuth, requireRole(['Admin', 'Designer']), async (_req: AuthedRequest, res: Response) => {
+assetsRouter.get('/', requireAuth, requireRole(['Admin', 'Designer']), async (req: AuthedRequest, res: Response) => {
   try {
-    const assets = await listAssets();
+    const assets = await listAssets(req.auth!.orgId!);
     res.json(assets);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected server error';
@@ -142,7 +143,7 @@ assetsRouter.get('/', requireAuth, requireRole(['Admin', 'Designer']), async (_r
  */
 assetsRouter.get('/:id/file', requireAuth, requireRole(['Admin', 'Designer']), async (req: AuthedRequest, res: Response) => {
   try {
-    const asset = await getAsset(req.params.id);
+    const asset = await getAsset(req.params.id, req.auth!.orgId!);
     if (!asset) {
       res.status(404).json({ error: 'Asset not found' });
       return;
@@ -180,7 +181,7 @@ assetsRouter.get('/:id/file', requireAuth, requireRole(['Admin', 'Designer']), a
  */
 assetsRouter.delete('/:id', requireAuth, requireRole(['Admin', 'Designer']), async (req: AuthedRequest, res: Response) => {
   try {
-    const deleted = await deleteAsset(req.params.id);
+    const deleted = await deleteAsset(req.params.id, req.auth!.orgId!);
     if (!deleted) {
       res.status(404).json({ error: 'Asset not found' });
       return;

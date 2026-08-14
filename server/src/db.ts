@@ -133,44 +133,62 @@ interface LetterheadDbRow extends Omit<LetterheadRow, 'static_schema'> {
 
 // ─── pdf_templates ───────────────────────────────────────────────────────────
 
-export async function listTemplates(): Promise<TemplateRow[]> {
+// A null orgId is only ever passed by the unauthenticated /generate-pdf
+// route (a template's published output is intentionally reachable by
+// anyone with its UUID, e.g. a public form-fill link) — every
+// authenticated management route below passes the caller's real orgId.
+async function assertTemplateOwnedByOrg(templateId: string, orgId: string): Promise<void> {
+  const { data, error } = await supabaseAdmin
+    .from('pdf_templates')
+    .select('id')
+    .eq('id', templateId)
+    .eq('org_id', orgId)
+    .maybeSingle();
+  if (error) throw toError(error);
+  if (!data) throw new Error('Template not found');
+}
+
+export async function listTemplates(orgId: string): Promise<TemplateRow[]> {
   const { data, error } = await supabaseAdmin
     .from('pdf_templates')
     .select('id, name, current_version, created_at, updated_at')
+    .eq('org_id', orgId)
     .order('created_at', { ascending: false });
   if (error) throw toError(error);
   return data as TemplateRow[];
 }
 
-export async function getTemplate(id: string): Promise<TemplateRow | null> {
-  const { data, error } = await supabaseAdmin
+export async function getTemplate(id: string, orgId: string | null): Promise<TemplateRow | null> {
+  let query = supabaseAdmin
     .from('pdf_templates')
     .select('id, name, current_version, created_at, updated_at')
-    .eq('id', id)
-    .maybeSingle();
+    .eq('id', id);
+  if (orgId !== null) query = query.eq('org_id', orgId);
+  const { data, error } = await query.maybeSingle();
   if (error) throw toError(error);
   return data as TemplateRow | null;
 }
 
-export async function createTemplate(name: string): Promise<TemplateRow> {
-  const { data, error } = await supabaseAdmin.from('pdf_templates').insert({ name }).select().single();
+export async function createTemplate(name: string, orgId: string): Promise<TemplateRow> {
+  const { data, error } = await supabaseAdmin.from('pdf_templates').insert({ name, org_id: orgId }).select().single();
   if (error) throw toError(error);
   return data as TemplateRow;
 }
 
-export async function updateTemplate(id: string, name: string): Promise<TemplateRow | null> {
+export async function updateTemplate(id: string, name: string, orgId: string): Promise<TemplateRow | null> {
   const { data, error } = await supabaseAdmin
     .from('pdf_templates')
     .update({ name, updated_at: new Date().toISOString() })
     .eq('id', id)
+    .eq('org_id', orgId)
     .select()
     .maybeSingle();
   if (error) throw toError(error);
   return data as TemplateRow | null;
 }
 
-export async function deleteTemplate(id: string): Promise<void> {
-  const { error } = await supabaseAdmin.from('pdf_templates').delete().eq('id', id);
+export async function deleteTemplate(id: string, orgId: string): Promise<void> {
+  const { error } = await supabaseAdmin.from('pdf_templates').delete().eq('id', id).eq('org_id', orgId);
   if (error) throw toError(error);
 }
 
@@ -180,7 +198,9 @@ function parseVersionRow(row: TemplateVersionDbRow): TemplateVersionRow {
   return { ...row, schema: JSON.parse(row.schema), base_pdf: JSON.parse(row.base_pdf), schemas: JSON.parse(row.schemas) };
 }
 
-export async function saveDraft(templateId: string, schema: unknown): Promise<TemplateVersionRow> {
+export async function saveDraft(templateId: string, schema: unknown, orgId: string): Promise<TemplateVersionRow> {
+  await assertTemplateOwnedByOrg(templateId, orgId);
+
   const schemaObj = schema as { basePdf?: unknown; schemas?: unknown };
   const schemaStr = JSON.stringify(schema);
   const basePdfStr = JSON.stringify(schemaObj.basePdf ?? null);
@@ -205,14 +225,6 @@ export async function saveDraft(templateId: string, schema: unknown): Promise<Te
     return parseVersionRow(data as TemplateVersionDbRow);
   }
 
-  const { data: templateRow, error: templateError } = await supabaseAdmin
-    .from('pdf_templates')
-    .select('id')
-    .eq('id', templateId)
-    .maybeSingle();
-  if (templateError) throw toError(templateError);
-  if (!templateRow) throw new Error('Template not found');
-
   // Drafts always use the reserved sentinel version 0 — never a real
   // published version number — so a template's first-ever publish can
   // start at version 1 without colliding with the draft row under the
@@ -226,7 +238,9 @@ export async function saveDraft(templateId: string, schema: unknown): Promise<Te
   return parseVersionRow(data as TemplateVersionDbRow);
 }
 
-export async function getDraft(templateId: string): Promise<TemplateVersionRow | null> {
+export async function getDraft(templateId: string, orgId: string): Promise<TemplateVersionRow | null> {
+  await assertTemplateOwnedByOrg(templateId, orgId);
+
   const { data, error } = await supabaseAdmin
     .from('template_versions')
     .select('*')
@@ -241,15 +255,20 @@ export async function publishVersion(
   templateId: string,
   schema: unknown,
   tag: string,
-  target: { mode: 'new' } | { mode: 'replace'; version: number }
+  target: { mode: 'new' } | { mode: 'replace'; version: number },
+  orgId: string
 ): Promise<TemplateVersionRow> {
   const schemaObj = schema as { basePdf?: unknown; schemas?: unknown };
   const schemaStr = JSON.stringify(schema);
   const basePdfStr = JSON.stringify(schemaObj.basePdf ?? null);
   const schemasStr = JSON.stringify(schemaObj.schemas ?? null);
 
+  // Ownership is checked inside the RPC itself (against p_org_id), not via a
+  // separate query beforehand — that would leave a check-then-act gap
+  // between the check and this atomic update.
   const { data, error } = await supabaseAdmin.rpc('publish_template_version', {
     p_template_id: templateId,
+    p_org_id: orgId,
     p_schema: schemaStr,
     p_base_pdf: basePdfStr,
     p_schemas: schemasStr,
@@ -261,7 +280,9 @@ export async function publishVersion(
   return parseVersionRow(data as TemplateVersionDbRow);
 }
 
-export async function listPublishedVersions(templateId: string): Promise<TemplateVersionRow[]> {
+export async function listPublishedVersions(templateId: string, orgId: string): Promise<TemplateVersionRow[]> {
+  await assertTemplateOwnedByOrg(templateId, orgId);
+
   const { data, error } = await supabaseAdmin
     .from('template_versions')
     .select('*')
@@ -274,15 +295,20 @@ export async function listPublishedVersions(templateId: string): Promise<Templat
 
 export async function getPublishedVersion(
   templateId: string,
-  ref: { version: number } | { tag: string }
+  ref: { version: number } | { tag: string },
+  orgId: string | null
 ): Promise<TemplateVersionRow | null> {
+  if (orgId !== null) await assertTemplateOwnedByOrg(templateId, orgId);
+
   const base = supabaseAdmin.from('template_versions').select('*').eq('template_id', templateId).eq('status', 'published');
   const { data, error } = await ('version' in ref ? base.eq('version', ref.version) : base.eq('tag', ref.tag)).maybeSingle();
   if (error) throw toError(error);
   return data ? parseVersionRow(data as TemplateVersionDbRow) : null;
 }
 
-export async function getLatestPublishedVersion(templateId: string): Promise<TemplateVersionRow | null> {
+export async function getLatestPublishedVersion(templateId: string, orgId: string | null): Promise<TemplateVersionRow | null> {
+  if (orgId !== null) await assertTemplateOwnedByOrg(templateId, orgId);
+
   const { data, error } = await supabaseAdmin
     .from('template_versions')
     .select('*')
@@ -361,17 +387,23 @@ export async function createGeneratedPdf(opts: {
 
 // ─── company_assets ──────────────────────────────────────────────────────────
 
-export async function listAssets(): Promise<CompanyAssetRow[]> {
+export async function listAssets(orgId: string): Promise<CompanyAssetRow[]> {
   const { data, error } = await supabaseAdmin
     .from('company_assets')
     .select('id, name, file_path, mime_type, file_size_bytes, created_at')
+    .eq('org_id', orgId)
     .order('created_at', { ascending: false });
   if (error) throw toError(error);
   return data as CompanyAssetRow[];
 }
 
-export async function getAsset(id: string): Promise<CompanyAssetRow | null> {
-  const { data, error } = await supabaseAdmin.from('company_assets').select('*').eq('id', id).maybeSingle();
+export async function getAsset(id: string, orgId: string): Promise<CompanyAssetRow | null> {
+  const { data, error } = await supabaseAdmin
+    .from('company_assets')
+    .select('*')
+    .eq('id', id)
+    .eq('org_id', orgId)
+    .maybeSingle();
   if (error) throw toError(error);
   return data as CompanyAssetRow | null;
 }
@@ -381,18 +413,31 @@ export async function createAsset(input: {
   filePath: string;
   mimeType: string;
   fileSizeBytes: number;
+  orgId: string;
 }): Promise<CompanyAssetRow> {
   const { data, error } = await supabaseAdmin
     .from('company_assets')
-    .insert({ name: input.name, file_path: input.filePath, mime_type: input.mimeType, file_size_bytes: input.fileSizeBytes })
+    .insert({
+      name: input.name,
+      file_path: input.filePath,
+      mime_type: input.mimeType,
+      file_size_bytes: input.fileSizeBytes,
+      org_id: input.orgId,
+    })
     .select()
     .single();
   if (error) throw toError(error);
   return data as CompanyAssetRow;
 }
 
-export async function deleteAsset(id: string): Promise<CompanyAssetRow | null> {
-  const { data, error } = await supabaseAdmin.from('company_assets').delete().eq('id', id).select().maybeSingle();
+export async function deleteAsset(id: string, orgId: string): Promise<CompanyAssetRow | null> {
+  const { data, error } = await supabaseAdmin
+    .from('company_assets')
+    .delete()
+    .eq('id', id)
+    .eq('org_id', orgId)
+    .select()
+    .maybeSingle();
   if (error) throw toError(error);
   return data as CompanyAssetRow | null;
 }
@@ -403,20 +448,22 @@ function parseLetterheadRow(row: LetterheadDbRow): LetterheadRow {
   return { ...row, static_schema: row.static_schema ? JSON.parse(row.static_schema) : null };
 }
 
-export async function listLetterheads(): Promise<LetterheadSummaryRow[]> {
+export async function listLetterheads(orgId: string): Promise<LetterheadSummaryRow[]> {
   const { data, error } = await supabaseAdmin
     .from('letterheads')
     .select('id, name, type, page_width, page_height, created_at, updated_at')
+    .eq('org_id', orgId)
     .order('updated_at', { ascending: false });
   if (error) throw toError(error);
   return data as LetterheadSummaryRow[];
 }
 
-export async function getLetterhead(id: string): Promise<LetterheadRow | null> {
+export async function getLetterhead(id: string, orgId: string): Promise<LetterheadRow | null> {
   const { data, error } = await supabaseAdmin
     .from('letterheads')
     .select('id, name, type, static_schema, page_width, page_height, base_pdf, created_at, updated_at')
     .eq('id', id)
+    .eq('org_id', orgId)
     .maybeSingle();
   if (error) throw toError(error);
   return data ? parseLetterheadRow(data as LetterheadDbRow) : null;
@@ -429,6 +476,7 @@ export async function createLetterhead(input: {
   pageWidth?: number;
   pageHeight?: number;
   basePdf?: string;
+  orgId: string;
 }): Promise<LetterheadRow> {
   const { data, error } = await supabaseAdmin
     .from('letterheads')
@@ -439,6 +487,7 @@ export async function createLetterhead(input: {
       page_width: input.pageWidth ?? null,
       page_height: input.pageHeight ?? null,
       base_pdf: input.basePdf ?? null,
+      org_id: input.orgId,
     })
     .select('id, name, type, static_schema, page_width, page_height, base_pdf, created_at, updated_at')
     .single();
@@ -448,9 +497,10 @@ export async function createLetterhead(input: {
 
 export async function updateLetterhead(
   id: string,
-  input: { name?: string; staticSchema?: unknown; pageWidth?: number; pageHeight?: number; basePdf?: string }
+  input: { name?: string; staticSchema?: unknown; pageWidth?: number; pageHeight?: number; basePdf?: string },
+  orgId: string
 ): Promise<LetterheadRow | null> {
-  const existing = await getLetterhead(id);
+  const existing = await getLetterhead(id, orgId);
   if (!existing) return null;
 
   const name = input.name ?? existing.name;
@@ -470,14 +520,15 @@ export async function updateLetterhead(
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)
+    .eq('org_id', orgId)
     .select('id, name, type, static_schema, page_width, page_height, base_pdf, created_at, updated_at')
     .maybeSingle();
   if (error) throw toError(error);
   return data ? parseLetterheadRow(data as LetterheadDbRow) : null;
 }
 
-export async function deleteLetterhead(id: string): Promise<void> {
-  const { error } = await supabaseAdmin.from('letterheads').delete().eq('id', id);
+export async function deleteLetterhead(id: string, orgId: string): Promise<void> {
+  const { error } = await supabaseAdmin.from('letterheads').delete().eq('id', id).eq('org_id', orgId);
   if (error) throw toError(error);
 }
 

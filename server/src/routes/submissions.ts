@@ -26,7 +26,7 @@ export const submissionsRouter = Router();
  */
 submissionsRouter.get('/templates/:id/submissions', requireAuth, requireRole(['Admin', 'Designer']), async (req: AuthedRequest, res: Response) => {
   try {
-    const template = await getTemplate(req.params.id);
+    const template = await getTemplate(req.params.id, req.auth!.orgId!);
     if (!template) {
       res.status(404).json({ error: 'Template not found' });
       return;

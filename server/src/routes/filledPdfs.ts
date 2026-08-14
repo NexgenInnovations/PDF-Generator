@@ -139,17 +139,19 @@ generatePdfRouter.post('/', async (req: Request, res: Response) => {
   }
 
   try {
-    const record = await getTemplate(template_id);
+    // This route is intentionally unauthenticated (public form-fill links),
+    // so template lookups here are not org-scoped — pass null explicitly.
+    const record = await getTemplate(template_id, null);
     if (!record) {
       res.status(404).json({ error: 'Template not found' });
       return;
     }
 
     const resolvedVersion = version !== undefined
-      ? await getPublishedVersion(template_id, { version })
+      ? await getPublishedVersion(template_id, { version }, null)
       : tag !== undefined
-        ? await getPublishedVersion(template_id, { tag })
-        : await getLatestPublishedVersion(template_id);
+        ? await getPublishedVersion(template_id, { tag }, null)
+        : await getLatestPublishedVersion(template_id, null);
 
     if (!resolvedVersion) {
       res.status(404).json({ error: 'No published version found' });

@@ -46,3 +46,17 @@ export function requireRole(allowed: Role[]) {
     next();
   };
 }
+
+// profiles has a DB-level check constraint that org_id and role are always
+// set together, so any route already gated by requireRole has a guaranteed
+// non-null orgId. Routes that only use requireAuth (no role restriction)
+// need this explicit check instead, since a signed-in user with no
+// organization yet would otherwise reach org-scoped queries with a null
+// orgId.
+export function requireOrg(req: AuthedRequest, res: Response, next: NextFunction) {
+  if (!req.auth?.orgId) {
+    res.status(403).json({ error: 'You must belong to an organization' });
+    return;
+  }
+  next();
+}

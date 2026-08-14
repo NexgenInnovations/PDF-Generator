@@ -1,5 +1,5 @@
-import { Router, Request, Response } from 'express';
-import { requireAuth, requireRole, type AuthedRequest } from '../middleware/auth.js';
+import { Router, Response } from 'express';
+import { requireAuth, requireOrg, requireRole, type AuthedRequest } from '../middleware/auth.js';
 import {
   createTemplate,
   deleteTemplate,
@@ -39,9 +39,9 @@ const handleError = (res: Response, error: unknown) => {
  *               items:
  *                 $ref: '#/components/schemas/TemplateSummary'
  */
-templatesRouter.get('/', requireAuth, async (_req: AuthedRequest, res: Response) => {
+templatesRouter.get('/', requireAuth, requireOrg, async (req: AuthedRequest, res: Response) => {
   try {
-    res.json(await listTemplates());
+    res.json(await listTemplates(req.auth!.orgId!));
   } catch (error) {
     handleError(res, error);
   }
@@ -74,9 +74,10 @@ templatesRouter.get('/', requireAuth, async (_req: AuthedRequest, res: Response)
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-templatesRouter.get('/:id', async (req: Request, res: Response) => {
+templatesRouter.get('/:id', requireAuth, requireOrg, async (req: AuthedRequest, res: Response) => {
   try {
-    const template = await getTemplate(req.params.id);
+    const orgId = req.auth!.orgId!;
+    const template = await getTemplate(req.params.id, orgId);
     if (!template) {
       res.status(404).json({ error: 'Template not found' });
       return;
@@ -85,7 +86,7 @@ templatesRouter.get('/:id', async (req: Request, res: Response) => {
     const { version, tag } = req.query as { version?: string; tag?: string };
     if (version !== undefined || tag !== undefined) {
       const ref = version !== undefined ? { version: Number(version) } : { tag: tag as string };
-      const published = await getPublishedVersion(req.params.id, ref);
+      const published = await getPublishedVersion(req.params.id, ref, orgId);
       if (!published) {
         res.status(404).json({ error: 'Requested version not found' });
         return;
@@ -99,8 +100,8 @@ templatesRouter.get('/:id', async (req: Request, res: Response) => {
     }
 
     const [draft, latestPublished] = await Promise.all([
-      getDraft(req.params.id),
-      getLatestPublishedVersion(req.params.id),
+      getDraft(req.params.id, orgId),
+      getLatestPublishedVersion(req.params.id, orgId),
     ]);
     res.json({
       ...template,
@@ -154,8 +155,9 @@ templatesRouter.post('/', requireAuth, requireRole(['Admin', 'Designer']), async
       res.status(400).json({ error: 'name and schema are required' });
       return;
     }
-    const template = await createTemplate(name);
-    const draft = await saveDraft(template.id, schema);
+    const orgId = req.auth!.orgId!;
+    const template = await createTemplate(name, orgId);
+    const draft = await saveDraft(template.id, schema, orgId);
     res.status(201).json({ ...template, schema, draft: { schema: draft.schema, version: draft.version } });
   } catch (error) {
     handleError(res, error);
@@ -208,14 +210,15 @@ templatesRouter.put('/:id', requireAuth, requireRole(['Admin', 'Designer']), asy
       res.status(400).json({ error: 'name is required' });
       return;
     }
-    const template = await updateTemplate(req.params.id, name);
+    const orgId = req.auth!.orgId!;
+    const template = await updateTemplate(req.params.id, name, orgId);
     if (!template) {
       res.status(404).json({ error: 'Template not found' });
       return;
     }
     let draft = null;
     if (schema !== undefined) {
-      const draftRow = await saveDraft(template.id, schema);
+      const draftRow = await saveDraft(template.id, schema, orgId);
       draft = { schema: draftRow.schema, version: draftRow.version };
     }
     res.json({ ...template, draft });
@@ -280,8 +283,9 @@ templatesRouter.post('/:id/publish', requireAuth, requireRole(['Admin', 'Designe
       return;
     }
 
+    const orgId = req.auth!.orgId!;
     const target = mode === 'new' ? { mode: 'new' as const } : { mode: 'replace' as const, version: version! };
-    const published = await publishVersion(req.params.id, schema, tag, target);
+    const published = await publishVersion(req.params.id, schema, tag, target, orgId);
 
     // Re-sync the draft to mirror what was just published. Best-effort: the
     // publish itself already committed, so a failure here must not be
@@ -289,7 +293,7 @@ templatesRouter.post('/:id/publish', requireAuth, requireRole(['Admin', 'Designe
     // publish didn't happen when it did, and could lead to a confusing
     // duplicate-tag 409 on a retry.
     try {
-      await saveDraft(req.params.id, schema);
+      await saveDraft(req.params.id, schema, orgId);
     } catch (syncError) {
       console.error('Failed to re-sync draft after publish:', syncError);
     }
@@ -321,9 +325,9 @@ templatesRouter.post('/:id/publish', requireAuth, requireRole(['Admin', 'Designe
  *       200:
  *         description: Array of published versions, newest first
  */
-templatesRouter.get('/:id/versions', requireAuth, async (req: AuthedRequest, res: Response) => {
+templatesRouter.get('/:id/versions', requireAuth, requireOrg, async (req: AuthedRequest, res: Response) => {
   try {
-    const versions = await listPublishedVersions(req.params.id);
+    const versions = await listPublishedVersions(req.params.id, req.auth!.orgId!);
     res.json(versions.map(v => ({ version: v.version, tag: v.tag, created_at: v.created_at })));
   } catch (error) {
     handleError(res, error);
@@ -355,7 +359,7 @@ templatesRouter.get('/:id/versions', requireAuth, async (req: AuthedRequest, res
  */
 templatesRouter.delete('/:id', requireAuth, requireRole(['Admin']), async (req: AuthedRequest, res: Response) => {
   try {
-    await deleteTemplate(req.params.id);
+    await deleteTemplate(req.params.id, req.auth!.orgId!);
     res.status(204).send();
   } catch (error) {
     handleError(res, error);

@@ -74,6 +74,7 @@ letterheadsRouter.post('/', requireAuth, requireRole(['Admin', 'Designer']), asy
       pageWidth: resolvedType === 'fields' ? pageWidth : undefined,
       pageHeight: resolvedType === 'fields' ? pageHeight : undefined,
       basePdf: resolvedType === 'pdf' ? basePdf : undefined,
+      orgId: req.auth!.orgId!,
     });
     res.status(201).json(letterhead);
   } catch (error) {
@@ -93,9 +94,9 @@ letterheadsRouter.post('/', requireAuth, requireRole(['Admin', 'Designer']), asy
  *       200:
  *         description: All letterheads
  */
-letterheadsRouter.get('/', requireAuth, requireRole(['Admin', 'Designer']), async (_req: AuthedRequest, res: Response) => {
+letterheadsRouter.get('/', requireAuth, requireRole(['Admin', 'Designer']), async (req: AuthedRequest, res: Response) => {
   try {
-    const letterheads = await listLetterheads();
+    const letterheads = await listLetterheads(req.auth!.orgId!);
     res.json(letterheads);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected server error';
@@ -125,7 +126,7 @@ letterheadsRouter.get('/', requireAuth, requireRole(['Admin', 'Designer']), asyn
  */
 letterheadsRouter.get('/:id', requireAuth, requireRole(['Admin', 'Designer']), async (req: AuthedRequest, res: Response) => {
   try {
-    const letterhead = await getLetterhead(req.params.id);
+    const letterhead = await getLetterhead(req.params.id, req.auth!.orgId!);
     if (!letterhead) {
       res.status(404).json({ error: 'Letterhead not found' });
       return;
@@ -195,13 +196,17 @@ letterheadsRouter.put('/:id', requireAuth, requireRole(['Admin', 'Designer']), a
   }
 
   try {
-    const updated = await updateLetterhead(req.params.id, {
-      name: name?.trim(),
-      staticSchema,
-      pageWidth,
-      pageHeight,
-      basePdf,
-    });
+    const updated = await updateLetterhead(
+      req.params.id,
+      {
+        name: name?.trim(),
+        staticSchema,
+        pageWidth,
+        pageHeight,
+        basePdf,
+      },
+      req.auth!.orgId!
+    );
     if (!updated) {
       res.status(404).json({ error: 'Letterhead not found' });
       return;
@@ -233,7 +238,7 @@ letterheadsRouter.put('/:id', requireAuth, requireRole(['Admin', 'Designer']), a
  */
 letterheadsRouter.delete('/:id', requireAuth, requireRole(['Admin', 'Designer']), async (req: AuthedRequest, res: Response) => {
   try {
-    await deleteLetterhead(req.params.id);
+    await deleteLetterhead(req.params.id, req.auth!.orgId!);
     res.status(204).send();
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected server error';
