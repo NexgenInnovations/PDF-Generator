@@ -80,14 +80,10 @@ export interface GeneratedPdfRow {
   generated_at: string;
 }
 
-export interface GeneratedPdfSummaryRow {
-  id: string;
-  submission_id: string;
+export interface SubmissionFolderRow {
   template_id: string;
   template_name: string;
-  template_version: number;
-  file_size_bytes: number | null;
-  generated_at: string;
+  submission_count: number;
 }
 
 interface GeneratedPdfDbRow extends Omit<GeneratedPdfRow, 'inputs_snapshot' | 'schema_snapshot'> {
@@ -430,26 +426,43 @@ export async function getGeneratedPdfBySubmissionId(submissionId: string): Promi
   return data as { id: string; file_size_bytes: number | null } | null;
 }
 
-// All filled PDFs across every template in the org, newest first — the
-// global admin "Submissions" view. pdf_templates!inner both requires a
-// matching template (excluding orphaned rows) and lets us filter/select
-// through the join without a separate round-trip for template names.
-export async function listGeneratedPdfsForOrg(orgId: string): Promise<GeneratedPdfSummaryRow[]> {
-  const { data, error } = await supabaseAdmin
+// One "folder" per template that's been published at least once — the
+// global admin "Submissions" view. A folder exists the moment a template is
+// published, even with zero submissions yet; it's derived live from
+// template_versions/generated_pdfs rather than a separate table, so there's
+// nothing to keep in sync when a template is published or filled.
+export async function listSubmissionFoldersForOrg(orgId: string): Promise<SubmissionFolderRow[]> {
+  const { data: templates, error: templatesError } = await supabaseAdmin
+    .from('pdf_templates')
+    .select('id, name')
+    .eq('org_id', orgId);
+  if (templatesError) throw toError(templatesError);
+  const templateRows = templates as { id: string; name: string }[];
+  if (templateRows.length === 0) return [];
+  const templateIds = templateRows.map(t => t.id);
+
+  const { data: publishedRows, error: publishedError } = await supabaseAdmin
+    .from('template_versions')
+    .select('template_id')
+    .eq('status', 'published')
+    .in('template_id', templateIds);
+  if (publishedError) throw toError(publishedError);
+  const publishedTemplateIds = new Set((publishedRows as { template_id: string }[]).map(r => r.template_id));
+
+  const { data: pdfRows, error: pdfError } = await supabaseAdmin
     .from('generated_pdfs')
-    .select('id, submission_id, template_id, template_version, file_size_bytes, generated_at, pdf_templates!inner(name, org_id)')
-    .eq('pdf_templates.org_id', orgId)
-    .order('generated_at', { ascending: false });
-  if (error) throw toError(error);
-  return (data as unknown as Array<GeneratedPdfDbRow & { pdf_templates: { name: string } }>).map(row => ({
-    id: row.id,
-    submission_id: row.submission_id,
-    template_id: row.template_id,
-    template_name: row.pdf_templates.name,
-    template_version: row.template_version,
-    file_size_bytes: row.file_size_bytes,
-    generated_at: row.generated_at,
-  }));
+    .select('template_id')
+    .eq('org_id', orgId);
+  if (pdfError) throw toError(pdfError);
+  const submissionCounts = new Map<string, number>();
+  for (const row of pdfRows as { template_id: string }[]) {
+    submissionCounts.set(row.template_id, (submissionCounts.get(row.template_id) ?? 0) + 1);
+  }
+
+  return templateRows
+    .filter(t => publishedTemplateIds.has(t.id))
+    .map(t => ({ template_id: t.id, template_name: t.name, submission_count: submissionCounts.get(t.id) ?? 0 }))
+    .sort((a, b) => a.template_name.localeCompare(b.template_name));
 }
 
 // ─── company_assets ──────────────────────────────────────────────────────────

@@ -1,58 +1,32 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertCircle, ClipboardList, FileText, Download } from 'lucide-react';
-import { api, downloadFile } from '../lib/api.js';
-import type { AllSubmissionsRecord } from '../types.js';
+import { AlertCircle, ClipboardList, Folder } from 'lucide-react';
+import { api } from '../lib/api.js';
+import type { SubmissionFolderRecord } from '../types.js';
 import { AppLayout } from '../components/layout/AppLayout.js';
 import { TopBar } from '../components/layout/TopBar.js';
 import { Card } from '../components/ui/card.js';
 
-function formatFileSize(bytes: number | null) {
-  if (bytes === null) return '—';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function SubmissionSkeleton() {
+function FolderSkeleton() {
   return (
-    <div
-      className="animate-pulse rounded-[var(--nx-radius-md)] border p-4"
-      style={{ background: 'var(--nx-surface)', borderColor: 'var(--nx-hairline)' }}
-    >
-      <div className="h-3 rounded w-1/3 mb-2" style={{ background: 'var(--nx-hairline)' }} />
-      <div className="h-2.5 rounded w-1/4" style={{ background: 'var(--nx-hairline)' }} />
+    <div className="animate-pulse space-y-2">
+      <div className="rounded-[var(--nx-radius-sm)]" style={{ background: 'var(--nx-surface)', aspectRatio: '4 / 3' }} />
+      <div className="h-2.5 rounded w-3/4" style={{ background: 'var(--nx-hairline)' }} />
     </div>
   );
 }
 
 export default function AllSubmissions() {
-  const [submissions, setSubmissions] = useState<AllSubmissionsRecord[]>([]);
+  const [folders, setFolders] = useState<SubmissionFolderRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
-    api.listAllSubmissions()
-      .then(setSubmissions)
+    api.listSubmissionFolders()
+      .then(setFolders)
       .catch(err => setError((err as Error).message))
       .finally(() => setLoading(false));
   }, []);
-
-  const handleDownload = async (submission: AllSubmissionsRecord) => {
-    setDownloadingId(submission.id);
-    setError(null);
-    try {
-      await downloadFile(
-        api.generatedPdfFileUrl(submission.id),
-        `${submission.template_name}-${submission.submission_id}.pdf`
-      );
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setDownloadingId(null);
-    }
-  };
 
   return (
     <AppLayout>
@@ -66,12 +40,12 @@ export default function AllSubmissions() {
         )}
 
         {loading && (
-          <div className="space-y-3">
-            {Array.from({ length: 4 }).map((_, i) => <SubmissionSkeleton key={i} />)}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {Array.from({ length: 5 }).map((_, i) => <FolderSkeleton key={i} />)}
           </div>
         )}
 
-        {!loading && submissions.length === 0 && (
+        {!loading && folders.length === 0 && (
           <Card
             className="p-16 flex flex-col items-center justify-center text-center"
             style={{ background: 'var(--nx-surface)' }}
@@ -82,45 +56,32 @@ export default function AllSubmissions() {
             >
               <ClipboardList className="h-6 w-6" style={{ color: 'var(--nx-accent)' }} />
             </div>
-            <p className="text-base font-semibold" style={{ color: 'var(--nx-ink)' }}>No submissions yet</p>
+            <p className="text-base font-semibold" style={{ color: 'var(--nx-ink)' }}>No submission folders yet</p>
             <p className="text-sm mt-1" style={{ color: 'var(--nx-ink-muted)' }}>
-              Filled PDFs from every template will show up here as people submit them.
+              Publish a template to get a folder here — filled PDFs will show up inside it as people submit them.
             </p>
           </Card>
         )}
 
-        {!loading && submissions.length > 0 && (
-          <div className="space-y-3">
-            {submissions.map(s => (
-              <Card key={s.id} className="p-4 flex items-center gap-3">
-                <div
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-                  style={{ background: 'var(--nx-accent-tint)' }}
-                >
-                  <FileText className="h-4 w-4" style={{ color: 'var(--nx-accent)' }} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <Link
-                    to={`/templates/${s.template_id}/submissions`}
-                    className="text-xs font-semibold hover:underline"
-                    style={{ color: 'var(--nx-ink)' }}
+        {!loading && folders.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {folders.map(f => (
+              <Link key={f.template_id} to={`/templates/${f.template_id}/submissions`}>
+                <Card className="p-4 flex flex-col items-center text-center gap-2 hover:shadow-md transition-shadow">
+                  <div
+                    className="flex h-12 w-12 items-center justify-center rounded-[var(--nx-radius-sm)]"
+                    style={{ background: 'var(--nx-accent-tint)' }}
                   >
-                    {s.template_name}
-                  </Link>
-                  <p className="text-xs" style={{ color: 'var(--nx-ink-muted)' }}>
-                    Version {s.template_version} · {formatFileSize(s.file_size_bytes)} · {new Date(s.generated_at).toLocaleString()}
+                    <Folder className="h-6 w-6" style={{ color: 'var(--nx-accent)' }} />
+                  </div>
+                  <p className="text-xs font-semibold truncate w-full" style={{ color: 'var(--nx-ink)' }}>
+                    {f.template_name}
                   </p>
-                </div>
-                <button
-                  onClick={() => void handleDownload(s)}
-                  disabled={downloadingId === s.id}
-                  className="flex items-center gap-1 text-xs font-semibold transition-colors hover:text-[var(--nx-ink)] disabled:opacity-50 shrink-0"
-                  style={{ color: 'var(--nx-accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  {downloadingId === s.id ? 'Downloading…' : 'Download'}
-                </button>
-              </Card>
+                  <p className="text-xs" style={{ color: 'var(--nx-ink-muted)' }}>
+                    {f.submission_count} submission{f.submission_count === 1 ? '' : 's'}
+                  </p>
+                </Card>
+              </Link>
             ))}
           </div>
         )}

@@ -4,7 +4,7 @@ import {
   getTemplate,
   listSubmissionsForTemplate,
   listSignatureEventsForSubmission,
-  listGeneratedPdfsForOrg,
+  listSubmissionFoldersForOrg,
   getGeneratedPdfBySubmissionId,
   getGeneratedPdf,
 } from '../db.js';
@@ -19,16 +19,16 @@ const FILLED_PDFS_BUCKET = 'filled-pdfs';
  * @openapi
  * /submissions:
  *   get:
- *     summary: List every filled PDF submission across all templates in the caller's organization
+ *     summary: List one "folder" per published template in the caller's organization, with its submission count
  *     tags: [Submissions]
  *     responses:
  *       200:
- *         description: Submissions for the organization, most recent first
+ *         description: Folders, alphabetical by template name
  */
 submissionsRouter.get('/submissions', requireAuth, requireRole(['Admin', 'Designer']), async (req: AuthedRequest, res: Response) => {
   try {
-    const submissions = await listGeneratedPdfsForOrg(req.auth!.orgId!);
-    res.json(submissions);
+    const folders = await listSubmissionFoldersForOrg(req.auth!.orgId!);
+    res.json(folders);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected server error';
     console.error(error);

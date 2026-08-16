@@ -74,12 +74,8 @@ export interface SubmissionRecord {
   fileSizeBytes: number | null;
 }
 
-export interface AllSubmissionsRecord {
-  id: string;
-  submission_id: string;
+export interface SubmissionFolderRecord {
   template_id: string;
   template_name: string;
-  template_version: number;
-  file_size_bytes: number | null;
-  generated_at: string;
+  submission_count: number;
 }

@@ -7,7 +7,7 @@ import type {
   LetterheadSummary,
   LetterheadRecord,
   SubmissionRecord,
-  AllSubmissionsRecord,
+  SubmissionFolderRecord,
 } from "../types.js";
 import type { Template } from "@pdfme/common";
 import { supabase } from "./supabase.js";
@@ -228,7 +228,7 @@ export const api = {
 
   listSubmissions: (templateId: string) => request<SubmissionRecord[]>(`/templates/${templateId}/submissions`),
 
-  listAllSubmissions: () => request<AllSubmissionsRecord[]>("/submissions"),
+  listSubmissionFolders: () => request<SubmissionFolderRecord[]>("/submissions"),
 
   generatedPdfFileUrl: (id: string) => `${API_BASE}/generated-pdfs/${id}/file`,
 
