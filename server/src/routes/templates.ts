@@ -117,6 +117,77 @@ templatesRouter.get('/:id', requireAuth, requireOrg, async (req: AuthedRequest, 
 
 /**
  * @openapi
+ * /templates/{id}/public:
+ *   get:
+ *     summary: Get a template's published schema for a public form-fill link (no auth required)
+ *     tags: [Templates]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: query
+ *         name: version
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: tag
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Template name and requested published version (draft is never included)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/TemplateRecord'
+ *       404:
+ *         description: Template or requested version not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+// Intentionally unauthenticated, like /generate-pdf: form-fill links are
+// shared with people who don't have (and shouldn't need) an account. Only
+// published schemas are exposed here — never the draft.
+templatesRouter.get('/:id/public', async (req, res: Response) => {
+  try {
+    const template = await getTemplate(req.params.id, null);
+    if (!template) {
+      res.status(404).json({ error: 'Template not found' });
+      return;
+    }
+
+    const { version, tag } = req.query as { version?: string; tag?: string };
+    const resolvedVersion = version !== undefined
+      ? await getPublishedVersion(req.params.id, { version: Number(version) }, null)
+      : tag !== undefined
+        ? await getPublishedVersion(req.params.id, { tag }, null)
+        : await getLatestPublishedVersion(req.params.id, null);
+
+    if (!resolvedVersion) {
+      res.status(404).json({ error: 'Requested version not found' });
+      return;
+    }
+
+    res.json({
+      id: template.id,
+      name: template.name,
+      created_at: template.created_at,
+      updated_at: template.updated_at,
+      draft: null,
+      latestPublished: { schema: resolvedVersion.schema, version: resolvedVersion.version, tag: resolvedVersion.tag },
+    });
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+/**
+ * @openapi
  * /templates:
  *   post:
  *     summary: Create a new template

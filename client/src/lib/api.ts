@@ -101,6 +101,11 @@ export const api = {
   getTemplate: (id: string, versionRef?: PublishedVersionRef) =>
     request<TemplateRecord>(`/templates/${id}${versionRefToQuery(versionRef)}`),
 
+  // Unauthenticated: used by the public form-fill page, which people open
+  // without an account via a shared link.
+  getPublicTemplate: (id: string, versionRef?: PublishedVersionRef) =>
+    request<TemplateRecord>(`/templates/${id}/public${versionRefToQuery(versionRef)}`),
+
   createTemplate: (name: string, schema: Template) =>
     request<TemplateRecord>("/templates", {
       method: "POST",

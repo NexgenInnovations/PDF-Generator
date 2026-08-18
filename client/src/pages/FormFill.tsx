@@ -60,7 +60,7 @@ export default function FormFill() {
 
   useEffect(() => {
     if (!id) return;
-    api.getTemplate(id, versionRef)
+    api.getPublicTemplate(id, versionRef)
       .then(async (record) => {
         const schema = record.latestPublished?.schema;
         if (!schema) { setError('No published version available for this template.'); return; }
