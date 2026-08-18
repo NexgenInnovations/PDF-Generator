@@ -343,7 +343,7 @@ export default function TemplateDesigner() {
   }, [aiOpen, seedPrompt, location.state, location.pathname, navigate]);
 
   const handleSave = async () => {
-    if (!designerRef.current) return;
+    if (!designerRef.current || saving) return;
     if (!name.trim()) { setError('Template name is required'); return; }
     setSaving(true);
     setError(null);
@@ -809,7 +809,7 @@ export default function TemplateDesigner() {
         style={{ ...barStyle }}
       >
         <Group label="Project">
-          <ToolbarBtn icon={<Save size={13} />} label="Save Draft" onClick={handleSave} accent />
+          <ToolbarBtn icon={<Save size={13} />} label="Save Draft" onClick={handleSave} accent disabled={saving} />
           <ToolbarBtn icon={<Copy size={13} />} label="Save As" onClick={handleSaveAs} />
           <ToolbarBtn icon={<RotateCcw size={13} />} label="Reset" onClick={handleReset} />
           <ToolbarBtn icon={<UploadCloud size={13} />} label="Publish" onClick={() => void handleOpenPublish()} disabled={!id} />
