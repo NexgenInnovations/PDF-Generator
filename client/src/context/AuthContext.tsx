@@ -90,7 +90,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         emailRedirectTo: `${window.location.origin}/login`,
       },
     });
-    return { error: error?.message ?? null };
+    // Supabase only silently resends a confirmation email (no error) when the address is
+    // unconfirmed. For an already-confirmed address it returns a real "user already exists"
+    // error, which would let an attacker enumerate registered accounts via the sign-up form.
+    // Treat that specific error as success so the UI can't tell the two cases apart, matching
+    // the same anti-enumeration behavior Supabase already applies to the unconfirmed case.
+    if (error && error.code !== 'user_already_exists' && !/already registered/i.test(error.message)) {
+      return { error: error.message };
+    }
+    return { error: null };
   };
 
   const signInWithEmail = async (email: string, password: string) => {
