@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase.js';
 import type { Role } from '../types.js';
@@ -55,10 +55,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(await fetchProfile(userId));
   };
 
+  // Tracks which user's profile is currently loaded, so the SIGNED_IN handling below can tell
+  // an actual sign-in (new user) apart from Supabase re-emitting SIGNED_IN for the SAME user on
+  // tab-refocus/cross-tab revalidation — see the comment at its use below.
+  const lastLoadedUserId = useRef<string | null>(null);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       if (data.session) {
+        lastLoadedUserId.current = data.session.user.id;
         loadProfile(data.session.user.id).finally(() => setLoading(false));
       } else {
         setLoading(false);
@@ -68,14 +74,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
       if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
-      if (event === 'SIGNED_OUT') setRecoveryMode(false);
+      if (event === 'SIGNED_OUT') {
+        setRecoveryMode(false);
+        lastLoadedUserId.current = null;
+      }
       if (newSession) {
-        if (event === 'SIGNED_IN') {
+        const isNewUser = newSession.user.id !== lastLoadedUserId.current;
+        if (event === 'SIGNED_IN' && isNewUser) {
           // Email/password sign-in never reloads the page, so this listener is the only place
           // `loading` can cover the profile fetch. Without it, consumers see `session` set with
-          // `profile` still null and route as if the user had no organization. Deliberately not
-          // done for every event — TOKEN_REFRESHED fires roughly hourly and would blank every
-          // `loading`-gated route.
+          // `profile` still null and route as if the user had no organization. Gated on an
+          // actual identity change (not just the event name): Supabase also fires SIGNED_IN for
+          // the SAME already-loaded user on tab-refocus and cross-tab session revalidation, and
+          // toggling `loading` for that would blank every `loading`-gated route (including the
+          // template designer, mid-edit) on every tab switch.
+          lastLoadedUserId.current = newSession.user.id;
           setLoading(true);
           loadProfile(newSession.user.id).finally(() => setLoading(false));
         } else {
