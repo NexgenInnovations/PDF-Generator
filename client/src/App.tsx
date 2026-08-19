@@ -8,6 +8,7 @@ const Waitlist = lazy(() => import('./pages/Waitlist.js'));
 const Login = lazy(() => import('./pages/Login.js'));
 const Onboarding = lazy(() => import('./pages/Onboarding.js'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword.js'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword.js'));
 const Dashboard = lazy(() => import('./pages/Dashboard.js'));
 const TemplateList = lazy(() => import('./pages/TemplateList.js'));
 const TemplateGallery = lazy(() => import('./pages/TemplateGallery.js'));
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/join/:code" element={<Onboarding />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/templates/:id/fill" element={<FormFill />} />
 
         <Route path="/" element={<AuthGuard><Dashboard /></AuthGuard>} />
