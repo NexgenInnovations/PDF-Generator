@@ -16,6 +16,8 @@ interface AuthContextValue {
   profile: Profile | null;
   role: Role | null;
   loading: boolean;
+  /** True only while this browser session originated from clicking a password-recovery link. */
+  recoveryMode: boolean;
   signInWithGoogle: () => Promise<void>;
   signUpWithEmail: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
   signInWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -47,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [recoveryMode, setRecoveryMode] = useState(false);
 
   const loadProfile = async (userId: string) => {
     setProfile(await fetchProfile(userId));
@@ -62,10 +65,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
+      if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
+      if (event === 'SIGNED_OUT') setRecoveryMode(false);
       if (newSession) {
-        loadProfile(newSession.user.id);
+        if (event === 'SIGNED_IN') {
+          // Email/password sign-in never reloads the page, so this listener is the only place
+          // `loading` can cover the profile fetch. Without it, consumers see `session` set with
+          // `profile` still null and route as if the user had no organization. Deliberately not
+          // done for every event — TOKEN_REFRESHED fires roughly hourly and would blank every
+          // `loading`-gated route.
+          setLoading(true);
+          loadProfile(newSession.user.id).finally(() => setLoading(false));
+        } else {
+          loadProfile(newSession.user.id);
+        }
       } else {
         setProfile(null);
       }
@@ -115,7 +130,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updatePassword = async (newPassword: string) => {
     const { error } = await supabase.auth.updateUser({ password: newPassword });
-    return { error: error?.message ?? null };
+    if (error) return { error: error.message };
+    setRecoveryMode(false);
+    // A reset is often a response to a suspected compromise, so revoke every other session.
+    // `scope: 'others'` leaves this session intact. A failure here must not turn a successful
+    // password change into a reported failure.
+    const { error: signOutError } = await supabase.auth.signOut({ scope: 'others' });
+    if (signOutError) {
+      console.warn('Failed to sign out other sessions after password change:', signOutError.message);
+    }
+    return { error: null };
   };
 
   const signOut = async () => {
@@ -134,6 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile,
         role: profile?.role ?? null,
         loading,
+        recoveryMode,
         signInWithGoogle,
         signUpWithEmail,
         signInWithEmail,

@@ -49,7 +49,12 @@ export default function Login() {
     setSubmitting(false);
 
     if (result.error) {
-      setError(result.error);
+      // GoTrue's bare "Email not confirmed" gives the user nothing to act on.
+      setError(
+        result.error === 'Email not confirmed'
+          ? "Your email isn't confirmed yet. Check your inbox for the confirmation link, or sign up again with this email to resend it."
+          : result.error,
+      );
       return;
     }
     if (mode === 'signup') {
@@ -81,6 +86,20 @@ export default function Login() {
           <p className="mt-3 text-base max-w-sm" style={{ color: 'var(--nx-ink-secondary)' }}>
             We've sent a confirmation link to {email.trim()}. Click it to activate your account, then sign in.
           </p>
+          <button
+            type="button"
+            className="mt-6 text-sm"
+            style={{ color: 'var(--nx-accent)' }}
+            onClick={() => {
+              setSignedUp(false);
+              setFullName('');
+              setEmail('');
+              setPassword('');
+              setError(null);
+            }}
+          >
+            Use a different email
+          </button>
         </>
       ) : (
         <>

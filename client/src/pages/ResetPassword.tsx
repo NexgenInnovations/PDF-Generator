@@ -1,12 +1,12 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { FileText, AlertCircle } from 'lucide-react';
 import { Button } from '../components/ui/button.js';
 import { Input } from '../components/ui/input.js';
 import { useAuth } from '../context/AuthContext.js';
 
 export default function ResetPassword() {
-  const { session, loading, updatePassword } = useAuth();
+  const { recoveryMode, loading, updatePassword } = useAuth();
   const navigate = useNavigate();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -47,7 +47,9 @@ export default function ResetPassword() {
       >
         <FileText className="h-6 w-6" style={{ color: 'var(--nx-accent)' }} />
       </div>
-      {!session ? (
+      {/* Gate on the password-recovery event, not on any live session: an already-signed-in
+          visitor must not be able to change the password without re-authenticating. */}
+      {!recoveryMode ? (
         <>
           <h1 className="text-2xl font-bold tracking-tight">This reset link is invalid or has expired</h1>
           <Button size="lg" className="h-12 px-6 text-base mt-8" onClick={() => navigate('/forgot-password')}>
@@ -90,6 +92,9 @@ export default function ResetPassword() {
               {submitting ? 'Saving…' : 'Save new password'}
             </Button>
           </form>
+          <Link to="/login" className="mt-6 text-sm" style={{ color: 'var(--nx-accent)' }}>
+            Back to sign in
+          </Link>
         </>
       )}
     </div>
