@@ -68,6 +68,8 @@ export interface SubmissionRecord {
   id: string;
   template_id: string;
   template_version: number;
+  submitter_name: string;
+  submitter_email: string;
   submitted_at: string;
   signatureEvents: SignatureEventRecord[];
   generatedPdfId: string | null;

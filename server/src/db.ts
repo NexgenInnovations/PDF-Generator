@@ -61,6 +61,8 @@ export interface FilledSubmissionRow {
   template_id: string;
   template_version: number;
   inputs: unknown;
+  submitter_name: string;
+  submitter_email: string;
   submitted_at: string;
 }
 
@@ -342,11 +344,20 @@ export async function createFilledSubmission(
   templateId: string,
   templateVersion: number,
   inputs: unknown,
-  orgId: string | null
+  orgId: string | null,
+  submitterName: string,
+  submitterEmail: string
 ): Promise<FilledSubmissionRow> {
   const { data, error } = await supabaseAdmin
     .from('filled_submissions')
-    .insert({ template_id: templateId, template_version: templateVersion, inputs: JSON.stringify(inputs), org_id: orgId })
+    .insert({
+      template_id: templateId,
+      template_version: templateVersion,
+      inputs: JSON.stringify(inputs),
+      org_id: orgId,
+      submitter_name: submitterName,
+      submitter_email: submitterEmail,
+    })
     .select()
     .single();
   if (error) throw toError(error);

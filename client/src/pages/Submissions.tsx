@@ -110,9 +110,19 @@ export default function Submissions() {
                     <CheckCircle2 className="h-4 w-4" style={{ color: 'var(--nx-accent)' }} />
                   </div>
                   <div className="min-w-0 flex-1 flex items-center justify-between gap-3">
-                    <span className="text-xs font-semibold" style={{ color: 'var(--nx-ink)' }}>
-                      Version {s.template_version}
-                    </span>
+                    <div className="min-w-0">
+                      <span className="text-xs font-semibold" style={{ color: 'var(--nx-ink)' }}>
+                        {s.submitter_name || 'Anonymous'}
+                      </span>
+                      {s.submitter_email && (
+                        <span className="text-xs ml-1.5" style={{ color: 'var(--nx-ink-muted)' }}>
+                          &lt;{s.submitter_email}&gt;
+                        </span>
+                      )}
+                      <span className="text-xs ml-2" style={{ color: 'var(--nx-ink-muted)' }}>
+                        · Version {s.template_version}
+                      </span>
+                    </div>
                     <div className="flex items-center gap-3">
                       <span className="text-xs" style={{ color: 'var(--nx-ink-muted)' }}>
                         {new Date(s.submitted_at).toLocaleString()}
