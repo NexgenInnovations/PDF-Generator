@@ -30,12 +30,19 @@ export const generatePdfRouter = Router();
  *         application/json:
  *           schema:
  *             type: object
- *             required: [template_id, inputs]
+ *             required: [template_id, inputs, submitterName, submitterEmail]
  *             properties:
  *               template_id:
  *                 type: string
  *                 format: uuid
  *                 example: "F60E93AD-3726-4B83-AEA4-06948CAD870B"
+ *               submitterName:
+ *                 type: string
+ *                 example: "Jane Doe"
+ *               submitterEmail:
+ *                 type: string
+ *                 format: email
+ *                 example: "jane@example.com"
  *               inputs:
  *                 type: array
  *                 items:
@@ -88,19 +95,29 @@ export const generatePdfRouter = Router();
  *               $ref: '#/components/schemas/Error'
  */
 generatePdfRouter.post('/', async (req: Request, res: Response) => {
-  const { template_id, inputs, version, tag, signatureEvents, signAnywhere } = req.body as {
+  const { template_id, inputs, version, tag, signatureEvents, signAnywhere, submitterName, submitterEmail } = req.body as {
     template_id?: string;
     inputs?: Record<string, string>[];
     version?: number;
     tag?: string;
     signatureEvents?: { fieldName?: string; signerName?: string; signerEmail?: string }[];
     signAnywhere?: { page?: number; x?: number; y?: number; content?: string; signerName?: string; signerEmail?: string };
+    submitterName?: string;
+    submitterEmail?: string;
   };
 
   if (!template_id || !Array.isArray(inputs) || inputs.length === 0) {
     res.status(400).json({ error: 'template_id and a non-empty inputs array are required' });
     return;
   }
+
+  if (typeof submitterName !== 'string' || submitterName.trim().length === 0 ||
+      typeof submitterEmail !== 'string' || submitterEmail.trim().length === 0) {
+    res.status(400).json({ error: 'submitterName and submitterEmail are required' });
+    return;
+  }
+  const trimmedSubmitterName = submitterName.trim();
+  const trimmedSubmitterEmail = submitterEmail.trim();
 
   const validatedSignatureEvents: { fieldName: string; signerName: string; signerEmail: string }[] = [];
   if (signatureEvents !== undefined) {
@@ -240,7 +257,9 @@ generatePdfRouter.post('/', async (req: Request, res: Response) => {
         template_id,
         resolvedVersion.version,
         inputs,
-        orgId
+        orgId,
+        trimmedSubmitterName,
+        trimmedSubmitterEmail
       );
       await createGeneratedPdf({
         submissionId: submission.id,

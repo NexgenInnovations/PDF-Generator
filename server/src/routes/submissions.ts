@@ -116,6 +116,8 @@ submissionsRouter.get('/templates/:id/submissions', requireAuth, requireRole(['A
           id: submission.id,
           template_id: submission.template_id,
           template_version: submission.template_version,
+          submitter_name: submission.submitter_name,
+          submitter_email: submission.submitter_email,
           submitted_at: submission.submitted_at,
           signatureEvents: await listSignatureEventsForSubmission(submission.id),
           generatedPdfId: generatedPdf?.id ?? null,

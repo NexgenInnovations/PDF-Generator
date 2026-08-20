@@ -141,6 +141,7 @@ export const api = {
   createFilledPdf: async (
     template_id: string,
     inputs: Record<string, string>[],
+    submitter: { name: string; email: string },
     versionRef?: PublishedVersionRef,
     signatureEvents?: { fieldName: string; signerName: string; signerEmail: string }[],
     signAnywhere?: { page: number; x: number; y: number; content: string; signerName: string; signerEmail: string }
@@ -151,6 +152,8 @@ export const api = {
       body: JSON.stringify({
         template_id,
         inputs,
+        submitterName: submitter.name,
+        submitterEmail: submitter.email,
         ...(versionRef && "version" in versionRef ? { version: versionRef.version } : {}),
         ...(versionRef && "tag" in versionRef ? { tag: versionRef.tag } : {}),
         ...(signatureEvents && signatureEvents.length > 0 ? { signatureEvents } : {}),

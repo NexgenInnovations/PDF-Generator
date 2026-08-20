@@ -45,6 +45,8 @@ export default function FormFill() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signerDetails, setSignerDetails] = useState<Record<string, { name: string; email: string }>>({});
+  const [submitterName, setSubmitterName] = useState('');
+  const [submitterEmail, setSubmitterEmail] = useState('');
   const [placementMode, setPlacementMode] = useState(false);
   const [signAnywhereFieldName, setSignAnywhereFieldName] = useState<string | null>(null);
   const [customPdfPageSizes, setCustomPdfPageSizes] = useState<{ width: number; height: number }[] | null>(null);
@@ -122,6 +124,7 @@ export default function FormFill() {
   }, [templateRecord]);
 
   const signatureFields = templateRecord ? getSignatureFields(templateRecord.schema) : [];
+  const submitterDetailsFilled = Boolean(submitterName.trim() && submitterEmail.trim());
   const allSignerDetailsFilled =
     signatureFields.every(
       f => signerDetails[f.name]?.name?.trim() && signerDetails[f.name]?.email?.trim()
@@ -135,6 +138,12 @@ export default function FormFill() {
     setError(null);
     try {
       const inputs = (uiRef.current as Form).getInputs();
+
+      if (!submitterDetailsFilled) {
+        setError('Please enter your name and email before submitting.');
+        setSubmitting(false);
+        return;
+      }
 
       if (!allSignerDetailsFilled) {
         setError('Please fill in the signer details for every signature field before submitting.');
@@ -197,7 +206,14 @@ export default function FormFill() {
       }
 
       const template = templateRecord.schema;
-      const pdfBytes = await api.createFilledPdf(id, inputs, versionRef, signatureEvents, signAnywherePayload);
+      const pdfBytes = await api.createFilledPdf(
+        id,
+        inputs,
+        { name: submitterName.trim(), email: submitterEmail.trim() },
+        versionRef,
+        signatureEvents,
+        signAnywherePayload
+      );
       const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       setPdfUrl(url);
@@ -353,7 +369,7 @@ export default function FormFill() {
         {pageState === 'filling' && (
           <button
             onClick={handleSubmit}
-            disabled={submitting || !allSignerDetailsFilled}
+            disabled={submitting || !submitterDetailsFilled || !allSignerDetailsFilled}
             className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-black hover:bg-black/80 disabled:opacity-50 transition-all active:scale-[0.97]"
             style={{ borderRadius: 50 }}
           >
@@ -385,8 +401,15 @@ export default function FormFill() {
         </div>
       )}
 
-      {pageState === 'filling' && (signatureFields.length > 0 || signAnywhereFieldName) && (
+      {pageState === 'filling' && (
         <div style={{ padding: '12px 16px', background: '#f7f7f5', borderBottom: '1px solid #e6e6e6' }}>
+          <SignerDetailsPanel
+            fieldLabel="Your details (submitted by)"
+            name={submitterName}
+            email={submitterEmail}
+            onNameChange={setSubmitterName}
+            onEmailChange={setSubmitterEmail}
+          />
           {signatureFields.map(f => (
             <SignerDetailsPanel
               key={f.name}
